@@ -96,6 +96,7 @@ struct brcmf_cfg80211_info;
 	BRCMF_ENUM_DEF(TDLS_PEER_EVENT, 92) \
 	BRCMF_ENUM_DEF(PHY_TEMP, 111) \
 	BRCMF_ENUM_DEF(BCMC_CREDIT_SUPPORT, 127) \
+	BRCMF_ENUM_DEF(ULP, 146) \
 	BRCMF_ABSTRACT_ENUM_DEF(EXT_AUTH_REQ, 0) \
 	BRCMF_ABSTRACT_ENUM_DEF(EXT_AUTH_FRAME_RX, 1) \
 	BRCMF_ABSTRACT_ENUM_DEF(MGMT_FRAME_TXSTATUS, 2) \
@@ -107,6 +108,11 @@ struct brcmf_cfg80211_info;
 /* firmware event codes sent by the dongle */
 enum brcmf_fweh_event_code {
 	BRCMF_FWEH_EVENT_ENUM_DEFLIST
+	/* this determines event mask length which must match
+	 * minimum length check in device firmware so it is
+	 * hard-coded here.
+	 */
+	BRCMF_E_LAST = 147
 };
 #undef BRCMF_ENUM_DEF
 
@@ -283,6 +289,28 @@ struct brcmf_if_event {
 	u8 flags;
 	u8 bsscfgidx;
 	u8 role;
+};
+
+enum event_msgs_ext_command {
+	EVENTMSGS_NONE		=	0,
+	EVENTMSGS_SET_BIT	=	1,
+	EVENTMSGS_RESET_BIT	=	2,
+	EVENTMSGS_SET_MASK	=	3
+};
+
+#define EVENTMSGS_VER 1
+#define EVENTMSGS_EXT_STRUCT_SIZE	offsetof(struct eventmsgs_ext, mask[0])
+
+/* len-	for SET it would be mask size from the application to the firmware */
+/*		for GET it would be actual firmware mask size */
+/* maxgetsize -	is only used for GET. indicate max mask size that the */
+/*				application can read from the firmware */
+struct eventmsgs_ext {
+	u8	ver;
+	u8	command;
+	u8	len;
+	u8	maxgetsize;
+	u8	mask[1];
 };
 
 typedef int (*brcmf_fweh_handler_t)(struct brcmf_if *ifp,
