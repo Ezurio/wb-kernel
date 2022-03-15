@@ -90,8 +90,6 @@
 
 #define BRCMF_ND_INFO_TIMEOUT		msecs_to_jiffies(2000)
 
-#define BRCMF_PS_MAX_TIMEOUT_MS		2000
-
 /* Dump obss definitions */
 #define ACS_MSRMNT_DELAY		80
 #define CHAN_NOISE_DUMMY		(-80)
@@ -3457,11 +3455,6 @@ brcmf_cfg80211_set_power_mgmt(struct wiphy *wiphy, struct net_device *ndev,
 		else
 			bphy_err(drvr, "error (%d)\n", err);
 	}
-
-	err = brcmf_fil_iovar_int_set(ifp, "pm2_sleep_ret",
-				min_t(u32, timeout, BRCMF_PS_MAX_TIMEOUT_MS));
-	if (err)
-		bphy_err(drvr, "Unable to set pm timeout, (%d)\n", err);
 
 done:
 	brcmf_dbg(TRACE, "Exit\n");
