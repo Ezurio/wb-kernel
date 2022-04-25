@@ -317,9 +317,7 @@ brcmf_notify_auth_frame_rx(struct brcmf_if *ifp,
 	       mgmt_frame_len - offsetof(struct ieee80211_mgmt, u));
 
 	freq = ieee80211_channel_to_frequency(ch.control_ch_num,
-					      ch.band == BRCMU_CHAN_BAND_2G ?
-					      NL80211_BAND_2GHZ :
-					      NL80211_BAND_5GHZ);
+			BRCMU_CHAN_BAND_TO_NL80211(ch.band));
 
 	cfg80211_rx_mgmt(wdev, freq, 0, (u8 *)mgmt_frame, mgmt_frame_len,
 			 NL80211_RXMGMT_FLAG_EXTERNAL_AUTH);
