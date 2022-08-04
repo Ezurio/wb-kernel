@@ -7354,6 +7354,40 @@ brcmf_notify_rssi_change_ind(struct brcmf_if *ifp,
 	return 0;
 }
 
+static s32
+brcmf_notify_beacon_loss(struct brcmf_if *ifp,
+			 const struct brcmf_event_msg *e, void *data)
+{
+	struct brcmf_cfg80211_info *cfg = ifp->drvr->config;
+	struct brcmf_cfg80211_profile *profile = &ifp->vif->profile;
+	struct cfg80211_bss *bss;
+
+	brcmf_dbg(INFO, "Enter: event %s (%d), status=%d\n",
+		  brcmf_fweh_event_name(e->event_code), e->event_code,
+		  e->status);
+
+	if (!ifp->drvr->settings->roamoff)
+		return 0;
+
+	/* On beacon loss event, Supplicant triggers new scan request
+	 * with NL80211_SCAN_FLAG_FLUSH Flag set, but lost AP bss entry
+	 * still remained as it is held by cfg as associated. Unlinking this
+	 * current BSS from cfg cached bss list on beacon loss event here,
+	 * would allow supplicant to receive new scanned entries
+	 * without current bss and select new bss to trigger roam.
+	 */
+	bss = cfg80211_get_bss(cfg->wiphy, NULL, profile->bssid, 0, 0,
+			       IEEE80211_BSS_TYPE_ANY, IEEE80211_PRIVACY_ANY);
+	if (bss) {
+		cfg80211_unlink_bss(cfg->wiphy, bss);
+		cfg80211_put_bss(cfg->wiphy, bss);
+	}
+
+	cfg80211_cqm_beacon_loss_notify(cfg_to_ndev(cfg), GFP_KERNEL);
+
+	return 0;
+}
+
 static void brcmf_init_conf(struct brcmf_cfg80211_conf *conf)
 {
 	conf->frag_threshold = (u32)-1;
@@ -7401,6 +7435,8 @@ static void brcmf_register_event_handlers(struct brcmf_cfg80211_info *cfg)
 	brcmf_fweh_register(cfg->pub, BRCMF_E_RSSI, brcmf_notify_rssi);
 	brcmf_fweh_register(cfg->pub, BRCMF_E_RSSI,
 			    brcmf_notify_rssi_change_ind);
+	brcmf_fweh_register(cfg->pub, BRCMF_E_BCNLOST_MSG,
+			    brcmf_notify_beacon_loss);
 
 	brcmf_fwvid_register_event_handlers(cfg->pub);
 }
