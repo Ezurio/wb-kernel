@@ -7757,9 +7757,10 @@ brcmf_notify_beacon_loss(struct brcmf_if *ifp,
 	return 0;
 }
 
-static int brcmf_notify_twt(struct brcmf_if *ifp,
-				     const struct brcmf_event_msg *e,
-				     void *data)
+static int
+brcmf_notify_twt(struct brcmf_if *ifp,
+		 const struct brcmf_event_msg *e,
+		 void *data)
 {
 	brcmf_dbg(TRACE, "Enter\n");
 	return 0;
@@ -7815,7 +7816,7 @@ static void brcmf_register_event_handlers(struct brcmf_cfg80211_info *cfg)
 	brcmf_fweh_register(cfg->pub, BRCMF_E_BCNLOST_MSG,
 			    brcmf_notify_beacon_loss);
 	brcmf_fweh_register(cfg->pub, BRCMF_E_TWT_SETUP,
-				brcmf_notify_twt);
+			    brcmf_notify_twt);
 
 	brcmf_fwvid_register_event_handlers(cfg->pub);
 }
