@@ -6720,7 +6720,7 @@ brcmf_cfg80211_set_bitrate(struct wiphy *wiphy, struct net_device *ndev,
 	s32 ret = TIME_OK;
 	uint hegi;
 	u16 mcs_mask;
-	u8 band, mcs;
+	u8 band, mcs = 0;
 
 	ifp = netdev_priv(ndev);
 	ret = brcmf_fil_iovar_data_get(ifp, "he", he, sizeof(he));
