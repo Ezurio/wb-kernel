@@ -2111,7 +2111,7 @@ brcmf_sdio_read_control(struct brcmf_sdio *bus, u8 *hdr, uint len, uint doff)
 	}
 
 	/* Read remain of frame body */
-	sdret = brcmf_sdiod_recv_buf(bus->sdiodev, rbuf, rdlen);
+	sdret = brcmf_sdiod_recv_buf(bus->sdiodev, SDIO_FUNC_2, rbuf, rdlen);
 	bus->sdcnt.f2rxdata++;
 
 	/* Control frame failures need retransmission */
@@ -2197,7 +2197,7 @@ static uint brcmf_sdio_readframes(struct brcmf_sdio *bus, uint maxframes)
 		/* read header first for unknown frame length */
 		sdio_claim_host(bus->sdiodev->func1);
 		if (!rd->len) {
-			ret = brcmf_sdiod_recv_buf(bus->sdiodev,
+			ret = brcmf_sdiod_recv_buf(bus->sdiodev, SDIO_FUNC_2,
 						   bus->rxhdr, BRCMF_FIRSTREAD);
 			bus->sdcnt.f2rxhdrs++;
 			if (ret < 0) {
@@ -2254,7 +2254,7 @@ static uint brcmf_sdio_readframes(struct brcmf_sdio *bus, uint maxframes)
 		skb_pull(pkt, head_read);
 		pkt_align(pkt, rd->len_left, bus->head_align);
 
-		ret = brcmf_sdiod_recv_pkt(bus->sdiodev, pkt);
+		ret = brcmf_sdiod_recv_pkt(bus->sdiodev, SDIO_FUNC_2, pkt);
 		bus->sdcnt.f2rxdata++;
 		sdio_release_host(bus->sdiodev->func1);
 
