@@ -579,8 +579,8 @@ int brcmf_c_preinit_dcmds(struct brcmf_if *ifp)
 		goto done;
 	}
 
-	/* Enable event_msg_ext specific to 43012 chip */
-	if (bus->chip == CY_CC_43012_CHIP_ID) {
+	/* Enable event_msg_ext specific to 43012/43022 chip */
+	if (bus->chip == CY_CC_43012_CHIP_ID || bus->chip == CY_CC_43022_CHIP_ID) {
 		/* Program event_msg_ext to support event larger than 128 */
 		msglen = fweh->event_mask_len +
 				  EVENTMSGS_EXT_STRUCT_SIZE;
