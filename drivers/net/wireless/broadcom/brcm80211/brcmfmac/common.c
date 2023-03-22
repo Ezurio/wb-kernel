@@ -81,6 +81,10 @@ static int brcmf_max_pm;
 module_param_named(max_pm, brcmf_max_pm, int, 0);
 MODULE_PARM_DESC(max_pm, "Use max power management mode by default");
 
+int brcmf_pkt_prio_enable;
+module_param_named(pkt_prio, brcmf_pkt_prio_enable, int, 0);
+MODULE_PARM_DESC(pkt_prio, "Support for update the packet priority");
+
 static char brcmf_regdomain[BRCMF_REGDOMAIN_LEN];
 module_param_string(regdomain, brcmf_regdomain,
 		    BRCMF_REGDOMAIN_LEN, 0400);
@@ -622,6 +626,7 @@ struct brcmf_mp_device *brcmf_get_module_param(struct device *dev,
 #endif
 	settings->fw_ap_select = !!brcmf_fw_ap_select;
 	settings->disable_6ghz = !!brcmf_disable_6ghz;
+	settings->pkt_prio = !!brcmf_pkt_prio_enable;
 
 	// Summit - Copy regulory domain module parameter, subject to
 	// override by DT
