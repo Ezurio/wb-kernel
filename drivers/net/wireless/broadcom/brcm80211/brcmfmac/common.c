@@ -109,6 +109,10 @@ static int brcmf_sdio_in_isr;
 module_param_named(sdio_in_isr, brcmf_sdio_in_isr, int, 0400);
 MODULE_PARM_DESC(sdio_in_isr, "Handle SDIO DPC in ISR");
 
+static int brcmf_sdio_rxf_in_kthread;
+module_param_named(sdio_rxf_thread, brcmf_sdio_rxf_in_kthread, int, 0400);
+MODULE_PARM_DESC(sdio_rxf_thread, "SDIO RX Frame in Kthread");
+
 static struct brcmfmac_platform_data *brcmfmac_pdata;
 struct brcmf_mp_global_t brcmf_mp_global;
 
@@ -632,6 +636,7 @@ struct brcmf_mp_device *brcmf_get_module_param(struct device *dev,
 	settings->disable_6ghz = !!brcmf_disable_6ghz;
 	settings->sdio_in_isr = !!brcmf_sdio_in_isr;
 	settings->pkt_prio = !!brcmf_pkt_prio_enable;
+	settings->sdio_rxf_in_kthread_enabled = !!brcmf_sdio_rxf_in_kthread;
 
 	// Summit - Copy regulory domain module parameter, subject to
 	// override by DT
