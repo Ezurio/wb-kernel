@@ -76,6 +76,7 @@ extern struct brcmf_mp_global_t brcmf_mp_global;
  */
 #define BRCMF_MAX_FEATURE_BYTES DIV_ROUND_UP(BRCMF_FEAT_LAST, 8)
 struct brcmf_mp_device {
+	bool		enable_6ghz_master;
 	bool		p2p_enable;
 	unsigned char	feature_disable[BRCMF_MAX_FEATURE_BYTES];
 	int		fcmode;

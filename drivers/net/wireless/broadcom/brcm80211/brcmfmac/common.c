@@ -49,6 +49,10 @@ module_param_string(regdomain, brcmf_regdomain,
 		    BRCMF_REGDOMAIN_LEN, 0400);
 MODULE_PARM_DESC(regdomain, "Regulatory domain/country code");
 
+static int brcmf_enable_6ghz_master;
+module_param_named(enable_6ghz_master, brcmf_enable_6ghz_master, int, 0400);
+MODULE_PARM_DESC(roamoff, "Enable master mode support in 6G band");
+
 /* Debug level configuration. See debug.h for bits, sysfs modifiable */
 int brcmf_msg_level;
 module_param_named(debug, brcmf_msg_level, int, 0600);
@@ -796,6 +800,7 @@ struct brcmf_mp_device *brcmf_get_module_param(struct device *dev,
 	strscpy(settings->regdomain, brcmf_regdomain, BRCMF_REGDOMAIN_LEN);
 
 	/* start by using the module parameters */
+	settings->enable_6ghz_master = !!brcmf_enable_6ghz_master;
 	brcmf_dbg(INFO, "debug: 0x%x\n", brcmf_msg_level);
 	brcmf_dbg(INFO, "alternative_fw_path: %s\n", brcmf_firmware_path);
 	settings->p2p_enable = !!brcmf_p2p_enable;
