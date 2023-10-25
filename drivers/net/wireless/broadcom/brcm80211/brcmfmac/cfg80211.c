@@ -2478,8 +2478,9 @@ brcmf_set_key_mgmt(struct net_device *ndev, struct cfg80211_connect_params *sme)
 			val = WPA3_AUTH_SAE_PSK;
 			break;
 		case WLAN_AKM_SUITE_FT_OVER_SAE:
-			val = WPA3_AUTH_SAE_PSK | WPA2_AUTH_FT;
+			val = WPA3_AUTH_SAE_FBT;
 			profile->is_ft = true;
+			profile->use_fwsup = BRCMF_PROFILE_FWSUP_ROAM;
 			break;
 		default:
 			bphy_err(drvr, "invalid akm suite (%d)\n",
