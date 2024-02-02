@@ -6035,6 +6035,7 @@ brcmf_cfg80211_start_ap(struct wiphy *wiphy, struct net_device *ndev,
 	bool supports_11d;
 	bool closednet;
 	struct bcm_xtlv *he_tlv;
+	struct brcmf_p2p_info *p2p = &cfg->p2p;
 
 	brcmf_dbg(TRACE, "ctrlchn=%d, center=%d, bw=%d, beacon_interval=%d, dtim_period=%d,\n",
 		  settings->chandef.chan->hw_value,
@@ -6302,6 +6303,7 @@ brcmf_cfg80211_start_ap(struct wiphy *wiphy, struct net_device *ndev,
 			goto exit;
 		}
 
+		p2p->afx_hdl.my_listen_chan = chanspec;
 		ifp->isap = true;
 		brcmf_dbg(TRACE, "GO mode configuration complete\n");
 	} else {
