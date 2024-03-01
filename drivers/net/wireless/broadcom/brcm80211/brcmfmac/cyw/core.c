@@ -203,6 +203,7 @@ brcmf_cyw_external_auth(struct wiphy *wiphy, struct net_device *dev,
 	struct brcmf_pub *drvr;
 	struct brcmf_auth_req_status_le auth_status;
 	int ret = 0;
+	struct brcmf_cfg80211_info *cfg = wiphy_to_cfg(wiphy);
 
 	brcmf_dbg(TRACE, "Enter\n");
 
@@ -229,6 +230,19 @@ brcmf_cyw_external_auth(struct wiphy *wiphy, struct net_device *dev,
 				       sizeof(auth_status));
 	if (ret < 0)
 		bphy_err(drvr, "auth_status iovar failed: ret=%d\n", ret);
+
+	if (params->pmkid) {
+		ret = brcmf_update_pmksa(cfg,
+					 ifp,
+					 params->bssid,
+					 params->pmkid,
+					 PMKSA_SET);
+		if (ret < 0) {
+			bphy_err(drvr,
+				 "PMKSA_SET brcmf_update_pmksa failed: ret=%d\n",
+				 ret);
+		}
+	}
 
 	return ret;
 }

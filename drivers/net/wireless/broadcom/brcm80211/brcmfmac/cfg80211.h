@@ -315,6 +315,11 @@ struct escan_info {
 		   struct cfg80211_scan_request *request);
 };
 
+enum brcmf_pmksa_action {
+	PMKSA_SET = 0,
+	PMKSA_DELETE = 1
+};
+
 struct cqm_rssi_info {
 	bool enable;
 	s32 rssi_threshold;
@@ -533,6 +538,11 @@ void brcmf_cfg80211_free_netdev(struct net_device *ndev);
 int brcmf_set_wsec(struct brcmf_if *ifp, const u8 *key, u16 key_len, u16 flags);
 int brcmf_cfg80211_mgmt_tx(struct wiphy *wiphy, struct wireless_dev *wdev,
 			   struct cfg80211_mgmt_tx_params *params, u64 *cookie);
+s32 brcmf_update_pmksa(struct brcmf_cfg80211_info *cfg,
+		   struct brcmf_if *ifp,
+		   const u8 *bssid,
+		   const u8 *pmkid,
+		   enum brcmf_pmksa_action action);
 
 void brcmf_cfg80211_update_proto_addr_mode(struct wireless_dev *wdev);
 #endif /* BRCMFMAC_CFG80211_H */
