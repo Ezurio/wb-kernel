@@ -10,6 +10,7 @@
 #include <linux/module.h>
 #include <linux/vmalloc.h>
 #include <linux/bitfield.h>
+#include <linux/string.h>
 #include <net/cfg80211.h>
 #include <net/netlink.h>
 #include <uapi/linux/if_arp.h>
@@ -505,7 +506,8 @@ wl_set_wsec_info_algos(struct brcmf_if *ifp, u32 algos, u32 mask)
 
 	wsec_info_tlv->id = cpu_to_le16(WL_WSEC_INFO_BSS_ALGOS);
 	wsec_info_tlv->len = cpu_to_le16(tlv_data_len);
-	memcpy(wsec_info_tlv->data, tlv_data, tlv_data_len);
+	unsafe_memcpy(wsec_info_tlv->data, tlv_data, tlv_data_len,
+			/* alloc enough buf*/);
 
 	param_len = offsetof(struct wl_wsec_info, tlvs) +
 		    offsetof(struct wl_wsec_info_tlv, data) + tlv_data_len;
@@ -6600,8 +6602,8 @@ brcmf_cfg80211_mgmt_tx(struct wiphy *wiphy, struct wireless_dev *wdev,
 		af_params->channel = hw_ch;
 
 		af_params->dwell_time = cpu_to_le32(params->wait);
-		memcpy(action_frame->data, &buf[DOT11_MGMT_HDR_LEN],
-		       le16_to_cpu(action_frame->len));
+		unsafe_memcpy(action_frame->data, &buf[DOT11_MGMT_HDR_LEN],
+		       le16_to_cpu(action_frame->len), /* alloc enough buf*/);
 
 		brcmf_dbg(TRACE, "Action frame, cookie=%lld, len=%d, channel=%d\n",
 			  *cookie, le16_to_cpu(action_frame->len),
