@@ -30,6 +30,9 @@
 
 #define BTTI_SDIO_AUTOSUSPEND_DELAY	8000
 
+#undef BT_INFO
+#define BT_INFO BT_DBG
+
 static int btti_hci_is_ble_enabled(struct btti_private *private_data);
 
 
@@ -368,8 +371,6 @@ int btti_hci_register_hdev(struct btti_private *private_data)
 	SET_HCIDEV_DEV(hdev, &sdiodev->func->dev);
 
 	set_bit(HCI_QUIRK_NON_PERSISTENT_SETUP, &hdev->quirks);
-
-	hdev->dev_type = HCI_PRIMARY;
 
 	ret = hci_register_dev(hdev);
 	if (ret < 0) {
