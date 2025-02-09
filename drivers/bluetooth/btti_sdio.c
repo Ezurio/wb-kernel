@@ -35,6 +35,8 @@
 
 #define SDIO_DEVICE_ID_TI_CC33XX	0x4077
 
+#undef BT_INFO
+#define BT_INFO BT_DBG
 
 static void btti_sdio_if_remove(struct sdio_func *func);
 static int __maybe_unused btti_sdio_unregister_dev(struct sdio_func *func);
