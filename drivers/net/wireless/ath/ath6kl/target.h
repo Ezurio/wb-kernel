@@ -330,6 +330,14 @@ struct host_interest {
 #define HI_OPTION_FW_SUBMODE_BITS      0x2
 #define HI_OPTION_FW_SUBMODE_SHIFT     0x14
 
+/* hi_option_flag2 options */
+#define HI_OPTION_AP_CLIENT_CNT                 0x3c00 /* alternate number of clients in apmode */
+
+#define HI_OPTION_AP_CLIENT_CNT_SHIFT           0x0A
+
+/* 4-bits(Bit 13 - Bit 10) to notify number of clients in apmode */
+#define HI_OPTION_AP_CLIENT_CNT_MASK            0x0F
+
 /* Convert a Target virtual address into a Target physical address */
 #define AR6003_VTOP(vaddr) ((vaddr) & 0x001fffff)
 #define AR6004_VTOP(vaddr) (vaddr)
