@@ -1065,5 +1065,6 @@ void ath6kl_recovery_suspend(struct ath6kl *ar);
 void ath6kl_recovery_resume(struct ath6kl *ar);
 
 extern unsigned char allow_5720;
+extern unsigned int ap_client_cnt;
 
 #endif /* CORE_H */

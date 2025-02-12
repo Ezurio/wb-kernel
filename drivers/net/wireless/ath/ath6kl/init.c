@@ -639,6 +639,33 @@ int ath6kl_configure_target(struct ath6kl *ar)
 
 	ath6kl_dbg(ATH6KL_DBG_TRC, "firmware mode set\n");
 
+	if (ar->target_type == TARGET_TYPE_AR6004) {
+
+		param = 0;
+
+		if (ath6kl_bmi_read_hi32(ar, hi_option_flag2, &param) != 0) {
+			ath6kl_err("bmi_read_memory for setting hi_option_flag2 failed\n");
+			return -EIO;
+		}
+
+		if (ap_client_cnt <= AP_MAX_NUM_STA) {
+			/* 0 use FW default or 1 to 10 (AP_MAX_NUM_STA) */
+			param |= ap_client_cnt << HI_OPTION_AP_CLIENT_CNT_SHIFT;
+		} else {
+			ath6kl_err("ap_client_cnt out of range - using FW default %d\n", AP_MAX_NUM_STA);
+		}
+
+		if (ath6kl_bmi_write_hi32(ar, hi_option_flag2, param) != 0) {
+			ath6kl_err("bmi_write_memory for setting hi_option_flag2 failed\n");
+			return -EIO;
+		}
+
+	} else {
+		if (ap_client_cnt) {
+			ath6kl_err("setting ap_client_cnt is not supported\n");
+		}
+	}
+
 	/*
 	 * Hardcode the address use for the extended board data
 	 * Ideally this should be pre-allocate by the OS at boot time
