@@ -27,6 +27,8 @@ enum cc33xx_tm_commands {
 	CC33XX_TM_CMD_RECOVER,		/* Not in use. Keep to not break ABI */
 	CC33XX_TM_CMD_GET_MAC,
 
+	CC33XX_TM_CMD_EZ_DOMAIN = 100,
+
 	__CC33XX_TM_CMD_AFTER_LAST
 };
 #define CC33XX_TM_CMD_MAX (__CC33XX_TM_CMD_AFTER_LAST - 1)
@@ -395,6 +397,35 @@ out:
 	return ret;
 }
 
+static int cc33xx_tm_cmd_get_domain(struct cc33xx *wl, struct nlattr *tb[])
+{
+	struct sk_buff *skb;
+	int ret = 0;
+
+	mutex_lock(&wl->mutex);
+
+	skb = cfg80211_testmode_alloc_reply_skb(wl->hw->wiphy, REGDOMAIN_LEN);
+	if (!skb) {
+		ret = -ENOMEM;
+		goto out;
+	}
+
+	if (nla_put(skb, CC33XX_TM_ATTR_DATA,
+		REGDOMAIN_LEN, regdomain)) {
+		kfree_skb(skb);
+		ret = -EMSGSIZE;
+		goto out;
+	}
+
+	ret = cfg80211_testmode_reply(skb);
+	if (ret < 0)
+		goto out;
+
+out:
+	mutex_unlock(&wl->mutex);
+	return ret;
+}
+
 int cc33xx_tm_cmd(struct ieee80211_hw *hw, struct ieee80211_vif *vif,
 		  void *data, int len)
 {
@@ -429,6 +460,8 @@ int cc33xx_tm_cmd(struct ieee80211_hw *hw, struct ieee80211_vif *vif,
 		return cc33xx_tm_cmd_set_plt_mode(wl, tb);
 	case CC33XX_TM_CMD_GET_MAC:
 		return cc33xx_tm_cmd_get_mac(wl, tb);
+	case CC33XX_TM_CMD_EZ_DOMAIN:
+		return cc33xx_tm_cmd_get_domain(wl, tb);
 	default:
 		return -EOPNOTSUPP;
 	}

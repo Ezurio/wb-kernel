@@ -29,8 +29,7 @@
 #include "event.h"
 
 
-#define REGDOMAIN_LEN 4
-static char regdomain[REGDOMAIN_LEN];
+char regdomain[REGDOMAIN_LEN];
 
 #define CC33XX_WAKEUP_TIMEOUT 500
 #define CC33XX_FW_RX_PACKET_RAM (9 * 1024)
