@@ -569,6 +569,9 @@ s32 brcmf_update_pmksa(struct brcmf_cfg80211_info *cfg,
 		   const u8 *bssid,
 		   const u8 *pmkid,
 		   enum brcmf_pmksa_action action);
+s32 brcmf_inform_single_bss(struct brcmf_cfg80211_info *cfg,
+				   struct brcmf_bss_info_le *bi);
+void brcmf_delay(u32 ms);
 
 void brcmf_cfg80211_update_proto_addr_mode(struct wireless_dev *wdev);
 int ifx_vndr_cmdstr_hashtbl_init(void);

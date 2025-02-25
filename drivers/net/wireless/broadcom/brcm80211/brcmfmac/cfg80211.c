@@ -4021,7 +4021,7 @@ done:
 	return err;
 }
 
-static s32 brcmf_inform_single_bss(struct brcmf_cfg80211_info *cfg,
+s32 brcmf_inform_single_bss(struct brcmf_cfg80211_info *cfg,
 				   struct brcmf_bss_info_le *bi)
 {
 	struct wiphy *wiphy = cfg_to_wiphy(cfg);
@@ -4099,6 +4099,7 @@ static s32 brcmf_inform_single_bss(struct brcmf_cfg80211_info *cfg,
 
 	return 0;
 }
+BRCMF_EXPORT_SYMBOL_GPL(brcmf_inform_single_bss);
 
 static struct brcmf_bss_info_le *
 next_bss_le(struct brcmf_scan_results *list, struct brcmf_bss_info_le *bss)
@@ -4714,7 +4715,7 @@ static int brcmf_cfg80211_sched_scan_stop(struct wiphy *wiphy,
 	return 0;
 }
 
-static __always_inline void brcmf_delay(u32 ms)
+void brcmf_delay(u32 ms)
 {
 	if (ms < 1000 / HZ) {
 		cond_resched();
@@ -4723,6 +4724,7 @@ static __always_inline void brcmf_delay(u32 ms)
 		msleep(ms);
 	}
 }
+EXPORT_SYMBOL_GPL(brcmf_delay);
 
 static s32 brcmf_config_wowl_pattern(struct brcmf_if *ifp, u8 cmd[4],
 				     u8 *pattern, u32 patternsize, u8 *mask,
