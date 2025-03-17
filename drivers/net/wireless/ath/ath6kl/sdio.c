@@ -25,6 +25,7 @@
 #include <linux/mmc/sd.h>
 #include <linux/pm_runtime.h>
 #include <linux/gpio.h>
+#include <linux/gpio/consumer.h>
 #include "hif.h"
 #include "hif-ops.h"
 #include "target.h"
