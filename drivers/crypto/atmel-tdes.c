@@ -45,11 +45,6 @@
 #define TDES_FLAGS_OPMODE_MASK	(TDES_MR_OPMOD_MASK | TDES_MR_CFBS_MASK)
 #define TDES_FLAGS_ECB		TDES_MR_OPMOD_ECB
 #define TDES_FLAGS_CBC		TDES_MR_OPMOD_CBC
-#define TDES_FLAGS_OFB		TDES_MR_OPMOD_OFB
-#define TDES_FLAGS_CFB64	(TDES_MR_OPMOD_CFB | TDES_MR_CFBS_64b)
-#define TDES_FLAGS_CFB32	(TDES_MR_OPMOD_CFB | TDES_MR_CFBS_32b)
-#define TDES_FLAGS_CFB16	(TDES_MR_OPMOD_CFB | TDES_MR_CFBS_16b)
-#define TDES_FLAGS_CFB8		(TDES_MR_OPMOD_CFB | TDES_MR_CFBS_8b)
 
 #define TDES_FLAGS_MODE_MASK	(TDES_FLAGS_OPMODE_MASK | TDES_FLAGS_ENCRYPT)
 
@@ -60,13 +55,8 @@
 
 #define ATMEL_TDES_QUEUE_LENGTH	50
 
-#define CFB8_BLOCK_SIZE		1
-#define CFB16_BLOCK_SIZE	2
-#define CFB32_BLOCK_SIZE	4
-
 struct atmel_tdes_caps {
 	bool	has_dma;
-	u32		has_cfb_3keys;
 };
 
 struct atmel_tdes_ctx {
@@ -361,19 +351,7 @@ static int atmel_tdes_crypt_pdc(struct atmel_tdes_dev *dd,
 					   DMA_TO_DEVICE);
 	}
 
-	switch (dd->flags & TDES_FLAGS_OPMODE_MASK) {
-	case TDES_FLAGS_CFB8:
-		len32 = DIV_ROUND_UP(length, sizeof(u8));
-		break;
-
-	case TDES_FLAGS_CFB16:
-		len32 = DIV_ROUND_UP(length, sizeof(u16));
-		break;
-
-	default:
-		len32 = DIV_ROUND_UP(length, sizeof(u32));
-		break;
-	}
+	len32 = DIV_ROUND_UP(length, sizeof(u32));
 
 	atmel_tdes_write(dd, TDES_PTCR, TDES_PTCR_TXTDIS|TDES_PTCR_RXTDIS);
 	atmel_tdes_write(dd, TDES_TPR, dma_addr_in);
@@ -405,19 +383,7 @@ static int atmel_tdes_crypt_dma(struct atmel_tdes_dev *dd,
 					   DMA_TO_DEVICE);
 	}
 
-	switch (dd->flags & TDES_FLAGS_OPMODE_MASK) {
-	case TDES_FLAGS_CFB8:
-		addr_width = DMA_SLAVE_BUSWIDTH_1_BYTE;
-		break;
-
-	case TDES_FLAGS_CFB16:
-		addr_width = DMA_SLAVE_BUSWIDTH_2_BYTES;
-		break;
-
-	default:
-		addr_width = DMA_SLAVE_BUSWIDTH_4_BYTES;
-		break;
-	}
+	addr_width = DMA_SLAVE_BUSWIDTH_4_BYTES;
 
 	dd->dma_lch_in.dma_conf.dst_addr_width = addr_width;
 	dd->dma_lch_out.dma_conf.src_addr_width = addr_width;
@@ -734,31 +700,6 @@ static int atmel_tdes_crypt(struct skcipher_request *req, unsigned long mode)
 						DES_BLOCK_SIZE, 0);
 		break;
 
-	case TDES_FLAGS_CFB8:
-	case TDES_FLAGS_CFB16:
-	case TDES_FLAGS_CFB32:
-	case TDES_FLAGS_CFB64:
-		if (!(mode & TDES_FLAGS_ENCRYPT)) {
-			alignedlen = ALIGN_DOWN(req->cryptlen, ctx->block_size);
-			if (!alignedlen)
-				break;
-
-			lastlen = alignedlen < DES_BLOCK_SIZE ?
-				alignedlen : DES_BLOCK_SIZE;
-
-			scatterwalk_map_and_copy(rctx->lastc, req->src,
-				alignedlen - lastlen, lastlen, 0);
-		}
-		break;
-
-	case TDES_FLAGS_OFB:
-		lastlen = req->cryptlen & (DES_BLOCK_SIZE - 1);
-		if (!lastlen)
-			lastlen = DES_BLOCK_SIZE;
-		scatterwalk_map_and_copy(rctx->lastc, req->src,
-					req->cryptlen - lastlen, lastlen, 0);
-		break;
-
 	default:
 		break;
 	}
@@ -871,55 +812,6 @@ static int atmel_tdes_cbc_decrypt(struct skcipher_request *req)
 {
 	return atmel_tdes_crypt(req, TDES_FLAGS_CBC);
 }
-static int atmel_tdes_cfb_encrypt(struct skcipher_request *req)
-{
-	return atmel_tdes_crypt(req, TDES_FLAGS_CFB64 | TDES_FLAGS_ENCRYPT);
-}
-
-static int atmel_tdes_cfb_decrypt(struct skcipher_request *req)
-{
-	return atmel_tdes_crypt(req, TDES_FLAGS_CFB64);
-}
-
-static int atmel_tdes_cfb8_encrypt(struct skcipher_request *req)
-{
-	return atmel_tdes_crypt(req, TDES_FLAGS_CFB8 | TDES_FLAGS_ENCRYPT);
-}
-
-static int atmel_tdes_cfb8_decrypt(struct skcipher_request *req)
-{
-	return atmel_tdes_crypt(req, TDES_FLAGS_CFB8);
-}
-
-static int atmel_tdes_cfb16_encrypt(struct skcipher_request *req)
-{
-	return atmel_tdes_crypt(req, TDES_FLAGS_CFB16 | TDES_FLAGS_ENCRYPT);
-}
-
-static int atmel_tdes_cfb16_decrypt(struct skcipher_request *req)
-{
-	return atmel_tdes_crypt(req, TDES_FLAGS_CFB16);
-}
-
-static int atmel_tdes_cfb32_encrypt(struct skcipher_request *req)
-{
-	return atmel_tdes_crypt(req, TDES_FLAGS_CFB32 | TDES_FLAGS_ENCRYPT);
-}
-
-static int atmel_tdes_cfb32_decrypt(struct skcipher_request *req)
-{
-	return atmel_tdes_crypt(req, TDES_FLAGS_CFB32);
-}
-
-static int atmel_tdes_ofb_encrypt(struct skcipher_request *req)
-{
-	return atmel_tdes_crypt(req, TDES_FLAGS_OFB | TDES_FLAGS_ENCRYPT);
-}
-
-static int atmel_tdes_ofb_decrypt(struct skcipher_request *req)
-{
-	return atmel_tdes_crypt(req, TDES_FLAGS_OFB);
-}
 
 static int atmel_tdes_init_tfm(struct crypto_skcipher *tfm)
 {
@@ -963,71 +855,6 @@ static struct skcipher_alg tdes_algs[] = {
 	.decrypt		= atmel_tdes_cbc_decrypt,
 },
 {
-	.base.cra_name		= "cfb(des)",
-	.base.cra_driver_name	= "atmel-cfb-des",
-	.base.cra_blocksize	= 1,
-
-	.min_keysize		= DES_KEY_SIZE,
-	.max_keysize		= DES_KEY_SIZE,
-	.ivsize			= DES_BLOCK_SIZE,
-	.chunksize		= DES_BLOCK_SIZE,
-	.setkey			= atmel_des_setkey,
-	.encrypt		= atmel_tdes_cfb_encrypt,
-	.decrypt		= atmel_tdes_cfb_decrypt,
-},
-{
-	.base.cra_name		= "cfb8(des)",
-	.base.cra_driver_name	= "atmel-cfb8-des",
-	.base.cra_blocksize	= 1,
-
-	.min_keysize		= DES_KEY_SIZE,
-	.max_keysize		= DES_KEY_SIZE,
-	.ivsize			= DES_BLOCK_SIZE,
-	.chunksize		= CFB8_BLOCK_SIZE,
-	.setkey			= atmel_des_setkey,
-	.encrypt		= atmel_tdes_cfb8_encrypt,
-	.decrypt		= atmel_tdes_cfb8_decrypt,
-},
-{
-	.base.cra_name		= "cfb16(des)",
-	.base.cra_driver_name	= "atmel-cfb16-des",
-	.base.cra_blocksize	= 1,
-
-	.min_keysize		= DES_KEY_SIZE,
-	.max_keysize		= DES_KEY_SIZE,
-	.ivsize			= DES_BLOCK_SIZE,
-	.chunksize		= CFB16_BLOCK_SIZE,
-	.setkey			= atmel_des_setkey,
-	.encrypt		= atmel_tdes_cfb16_encrypt,
-	.decrypt		= atmel_tdes_cfb16_decrypt,
-},
-{
-	.base.cra_name		= "cfb32(des)",
-	.base.cra_driver_name	= "atmel-cfb32-des",
-	.base.cra_blocksize	= 1,
-
-	.min_keysize		= DES_KEY_SIZE,
-	.max_keysize		= DES_KEY_SIZE,
-	.ivsize			= DES_BLOCK_SIZE,
-	.chunksize		= CFB32_BLOCK_SIZE,
-	.setkey			= atmel_des_setkey,
-	.encrypt		= atmel_tdes_cfb32_encrypt,
-	.decrypt		= atmel_tdes_cfb32_decrypt,
-},
-{
-	.base.cra_name		= "ofb(des)",
-	.base.cra_driver_name	= "atmel-ofb-des",
-	.base.cra_blocksize	= 1,
-
-	.min_keysize		= DES_KEY_SIZE,
-	.max_keysize		= DES_KEY_SIZE,
-	.ivsize			= DES_BLOCK_SIZE,
-	.chunksize		= DES_BLOCK_SIZE,
-	.setkey			= atmel_des_setkey,
-	.encrypt		= atmel_tdes_ofb_encrypt,
-	.decrypt		= atmel_tdes_ofb_decrypt,
-},
-{
 	.base.cra_name		= "ecb(des3_ede)",
 	.base.cra_driver_name	= "atmel-ecb-tdes",
 	.base.cra_blocksize	= DES_BLOCK_SIZE,
@@ -1049,19 +876,6 @@ static struct skcipher_alg tdes_algs[] = {
 	.encrypt		= atmel_tdes_cbc_encrypt,
 	.decrypt		= atmel_tdes_cbc_decrypt,
 	.ivsize			= DES_BLOCK_SIZE,
-},
-{
-	.base.cra_name		= "ofb(des3_ede)",
-	.base.cra_driver_name	= "atmel-ofb-tdes",
-	.base.cra_blocksize	= 1,
-
-	.min_keysize		= DES3_EDE_KEY_SIZE,
-	.max_keysize		= DES3_EDE_KEY_SIZE,
-	.setkey			= atmel_tdes_setkey,
-	.encrypt		= atmel_tdes_ofb_encrypt,
-	.decrypt		= atmel_tdes_ofb_decrypt,
-	.ivsize			= DES_BLOCK_SIZE,
-	.chunksize		= DES_BLOCK_SIZE,
 },
 };
 
@@ -1130,14 +944,12 @@ static void atmel_tdes_get_cap(struct atmel_tdes_dev *dd)
 {
 
 	dd->caps.has_dma = 0;
-	dd->caps.has_cfb_3keys = 0;
 
 	/* keep only major version number */
 	switch (dd->hw_version & 0xf00) {
 	case 0x800:
 	case 0x700:
 		dd->caps.has_dma = 1;
-		dd->caps.has_cfb_3keys = 1;
 		break;
 	case 0x600:
 		break;
@@ -1196,14 +1008,10 @@ static int atmel_tdes_probe(struct platform_device *pdev)
 	}
 
 	/* Initializing the clock */
-	tdes_dd->iclk = devm_clk_get(&pdev->dev, "tdes_clk");
+	tdes_dd->iclk = devm_clk_get_enabled(&pdev->dev, "tdes_clk");
 	if (IS_ERR(tdes_dd->iclk)) {
 		dev_err(dev, "clock initialization failed.\n");
 		err = PTR_ERR(tdes_dd->iclk);
-	err = clk_prepare_enable(tdes_dd->iclk);
-	if (err)
-		goto err_tasklet_kill;
-
 		goto err_tasklet_kill;
 	}
 
@@ -1253,7 +1061,7 @@ err_tasklet_kill:
 	return err;
 }
 
-static int atmel_tdes_remove(struct platform_device *pdev)
+static void atmel_tdes_remove(struct platform_device *pdev)
 {
 	struct atmel_tdes_dev *tdes_dd = platform_get_drvdata(pdev);
 	if (!tdes_dd)
@@ -1270,11 +1078,7 @@ static int atmel_tdes_remove(struct platform_device *pdev)
 	if (tdes_dd->caps.has_dma)
 		atmel_tdes_dma_cleanup(tdes_dd);
 
-	clk_disable_unprepare(tdes_dd->iclk);
-
 	atmel_tdes_buff_cleanup(tdes_dd);
-
-	return 0;
 }
 
 #ifdef CONFIG_PM
@@ -1302,7 +1106,7 @@ static SIMPLE_DEV_PM_OPS(atmel_tdes_pm_ops, atmel_tdes_suspend,
 
 static struct platform_driver atmel_tdes_driver = {
 	.probe		= atmel_tdes_probe,
-	.remove		= atmel_tdes_remove,
+	.remove_new	= atmel_tdes_remove,
 	.driver		= {
 		.name	= "atmel_tdes",
 		.of_match_table = atmel_tdes_dt_ids,
