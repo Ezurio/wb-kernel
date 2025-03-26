@@ -15,8 +15,8 @@
 /* Wireless Driver Version */
 #define MAJOR_VERSION 	1
 #define MINOR_VERSION 	7
-#define API_VERSION 	0
-#define BUILD_VERSION	208
+#define API_VERSION 	119
+#define BUILD_VERSION	213
 
 
 /* The maximum number of Tx descriptors in all chip families */
@@ -25,6 +25,8 @@
 #define CC33XX_CMD_MAX_SIZE          (896)
 #define CC33XX_INI_PARAM_COMMAND_SIZE (16UL)//size of struct cc33xx_cmd_ini_params_download 
 #define CC33XX_INI_CMD_MAX_SIZE      (CC33X_CONF_SIZE + CC33XX_INI_PARAM_COMMAND_SIZE + sizeof(int))
+
+#define CC33XX_MAX_FW_LOGS_BUFFER_SIZE    ((0x1000) - (sizeof(struct NAB_header))) //a bit under ~4KB
 
 #define CC33XX_CMD_BUFFER_SIZE ((CC33XX_INI_CMD_MAX_SIZE > CC33XX_CMD_MAX_SIZE)\
 				? CC33XX_INI_CMD_MAX_SIZE : CC33XX_CMD_MAX_SIZE)
@@ -276,6 +278,10 @@ struct cc33xx {
 	/*ble_enable value - if 0 ble not enabled , if 1 is enabled..cant be disabled after enable*/
 	int ble_enable;
 
+	/*fw_crash_logs, allocated upon successfully receiving FW Logs after general error (ie FW assert)*/
+	u8  *fw_crash_logs;
+
+
 	/* parameters for joining a TWT agreement */
 	int min_wake_duration_usec;
 	int min_wake_interval_mantissa;
@@ -377,7 +383,10 @@ enum CC33xx_FRAME_FORMAT {
 #define NAB_SEND_CMD        0x940d // 0x900D
 #define NAB_SEND_FLAGS      0x08
 #define CC33xx_INTERNAL_DESC_SIZE   200
+
 #define NAB_EXTRA_BYTES 4
+
+#define NAB_GENERAL_ERROR_FW_LOGS_OPCODE  (0x900)
 
 #define TX_RESULT_QUEUE_SIZE  108
 

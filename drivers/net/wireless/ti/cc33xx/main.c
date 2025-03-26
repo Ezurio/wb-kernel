@@ -12,7 +12,6 @@
 #include <linux/firmware.h>
 #include <linux/irq.h>
 #include <linux/pm_wakeirq.h>
-
 #include "../net/mac80211/ieee80211_i.h"
 
 #include "acx.h"
@@ -31,8 +30,10 @@
 
 char regdomain[REGDOMAIN_LEN];
 
-#define CC33XX_WAKEUP_TIMEOUT 500
-#define CC33XX_FW_RX_PACKET_RAM (9 * 1024)
+#define CC33XX_WAKEUP_TIMEOUT 					500
+#define CC33XX_FW_RX_PACKET_RAM 				(9 * 1024)
+#define CC33XX_GENERAL_ERROR_READ_TIMEOUT_MSEC 	(3000)
+
 static char *fwlog_param;
 static int no_recovery     = -1;
 
@@ -948,6 +949,86 @@ static int read_control_message(struct cc33xx *wl, u8 *read_buffer,
 	return nab_header->len;
 }
 
+
+
+static int general_error_event_get_log(struct cc33xx *wl, 
+					struct core_status *core_status)
+{
+	int ret = 0; 
+	u8 *read_buffer;
+	const size_t buffer_size = 5000;
+	unsigned long end_time = jiffies + msecs_to_jiffies(CC33XX_GENERAL_ERROR_READ_TIMEOUT_MSEC);
+	u8 isGeneralError = 0;
+	u32 isTimeout = 0;
+	void* pFwCrashLogs;
+	
+
+	read_buffer = kmalloc(buffer_size, GFP_KERNEL);
+	if (!read_buffer)
+		return -ENOMEM;	
+
+	
+	cc33xx_debug(DEBUG_CMD, "Attempting to Get FW Crash Logs Before Starting Recovery Work");
+	while((isGeneralError != true) && (isTimeout != true))
+	{
+		ret = read_control_message(wl, read_buffer, buffer_size);
+		if(ret > 0)
+		{
+			struct NAB_header *nab_header = (struct NAB_header*) read_buffer;
+			if(nab_header->opcode == NAB_GENERAL_ERROR_FW_LOGS_OPCODE)
+			{
+				cc33xx_debug(DEBUG_CMD,"successfully received GENERAL ERROR CRASH FW_LOGS");
+				isGeneralError = 1;
+				break;
+			}
+		}
+		//should sleep here for 100ms if reading is zero 
+		if(isGeneralError != true)
+		{
+			msleep(100);
+			isTimeout = time_is_before_eq_jiffies(end_time);
+		}
+
+	}
+
+	if(isTimeout)
+	{
+		cc33xx_debug(DEBUG_CMD,"Timed Out Attempting to read  CRASH FW Logs");
+		goto out;
+	}
+
+
+
+	pFwCrashLogs = read_buffer;
+	pFwCrashLogs += sizeof(struct NAB_header);
+
+	if(wl->fw_crash_logs == NULL)
+	{
+		wl->fw_crash_logs = kzalloc(CC33XX_MAX_FW_LOGS_BUFFER_SIZE, GFP_KERNEL);
+		if (!wl->fw_crash_logs) {
+			ret = -ENOMEM;
+			goto err_crashfwlog;
+		}
+	}
+	else
+	{
+		memset(wl->fw_crash_logs, 0 , CC33XX_MAX_FW_LOGS_BUFFER_SIZE);
+	}
+
+	//store crash logs into WL
+	memcpy(wl->fw_crash_logs, pFwCrashLogs, CC33XX_MAX_FW_LOGS_BUFFER_SIZE);
+	goto out;
+
+
+err_crashfwlog:
+	kfree(wl->fw_crash_logs);
+	wl->fw_crash_logs = NULL;
+
+out:
+	kfree(read_buffer);
+	return ret; 
+}
+
 static int process_event_and_cmd_result(struct cc33xx *wl, 
 					struct core_status *core_status)
 {
@@ -961,7 +1042,6 @@ static int process_event_and_cmd_result(struct cc33xx *wl,
 	read_buffer = kmalloc(buffer_size, GFP_KERNEL);
 	if (!read_buffer)
 		return -ENOMEM;	
-
 	ret = read_control_message(wl, read_buffer, buffer_size);
 	if (ret < 0)
 		goto out;
@@ -1210,6 +1290,13 @@ static void cc33xx_recovery_work(struct work_struct *work)
 	if (wl->conf.core.no_recovery) {
 		cc33xx_info("Recovery disabled by configuration, "
 			    "driver will not restart.");
+
+		mutex_lock(&wl->mutex);
+
+		general_error_event_get_log(wl, wl->core_status);
+		
+		mutex_unlock(&wl->mutex);
+
 		return;
 	}
 
@@ -1219,6 +1306,9 @@ static void cc33xx_recovery_work(struct work_struct *work)
 	}
 
 	mutex_lock(&wl->mutex);
+
+	general_error_event_get_log(wl, wl->core_status);
+
 	while (!list_empty(&wl->wlvif_list)) {
 		wlvif = list_first_entry(&wl->wlvif_list,
 				       struct cc33xx_vif, list);
@@ -5499,7 +5589,7 @@ static int cc33xx_init_ieee80211(struct cc33xx *wl)
 
 	/* Enable/Disable He based on conf file params */
 	if(!wl->conf.mac.he_enable)
-	{
+		{
 		cc33xx_band_2ghz.iftype_data = NULL;
 		cc33xx_band_2ghz.n_iftype_data = 0;
 
@@ -5648,6 +5738,9 @@ struct ieee80211_hw *wlcore_alloc_hw(u32 aggr_buf_size)
 	wl->active_link_count = 0;
 	wl->fwlog_size = 0;
 
+	wl->fw_crash_logs = NULL;
+
+
 	/* The system link is always allocated */
 	__set_bit(CC33XX_SYSTEM_HLID, wl->links_map);
 
@@ -5731,6 +5824,10 @@ int wlcore_free_hw(struct cc33xx *wl)
 
 	kfree(wl->buffer_32);
 	kfree(wl->core_status);
+
+	kfree(wl->fw_crash_logs);
+	wl->fw_crash_logs = NULL;
+
 	free_page((unsigned long)wl->fwlog);
 	dev_kfree_skb(wl->dummy_packet);
 	free_pages((unsigned long)wl->aggr_buf, get_order(wl->aggr_buf_size));
@@ -5791,7 +5888,9 @@ static int read_version_info(struct cc33xx *wl)
 		    wl->all_versions.fw_ver->api_version, 
 		    wl->all_versions.fw_ver->build_version);
 
-	cc33xx_info("Wireless PHY version %u.%u.%u.%u.%u.%u", 
+	cc33xx_info("Wireless PHY version %u.%u.%u.%u.%u.%u.%u.%u",
+		    wl->all_versions.fw_ver->phy_version[7], 
+		    wl->all_versions.fw_ver->phy_version[6], 
 		    wl->all_versions.fw_ver->phy_version[5], 
 		    wl->all_versions.fw_ver->phy_version[4],
 		    wl->all_versions.fw_ver->phy_version[3], 
