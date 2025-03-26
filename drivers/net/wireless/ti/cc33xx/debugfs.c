@@ -182,7 +182,7 @@ struct cc33xx_cmd_dfs_radar_debug {
 /* ms */
 #define CC33XX_DEBUGFS_STATS_LIFETIME 1000
 #define MAX_VERSIONS_LEN	59
-#define MAX_VERSIONS_EXTENDED_LEN	86
+#define MAX_VERSIONS_EXTENDED_LEN	88
 
 static
 int cc33xx_cmd_radar_detection_debug(struct cc33xx *wl, u8 channel)
@@ -1267,6 +1267,38 @@ static const struct file_operations ble_enable_ops = {
 	.llseek = default_llseek,
 };
 
+
+
+static ssize_t fw_crash_log_read(struct file *file, char __user *user_buf,
+			       	      size_t count, loff_t *ppos)
+{
+	struct cc33xx *wl = file->private_data;
+	size_t len;
+	int ret;
+
+	if(wl->fw_crash_logs == NULL)
+	{
+		return 0;
+	}
+
+	len = CC33XX_MAX_FW_LOGS_BUFFER_SIZE;
+
+	mutex_lock(&wl->mutex);
+
+	ret = simple_read_from_buffer(user_buf, count, ppos, wl->fw_crash_logs, len);
+
+	mutex_unlock(&wl->mutex);
+
+	return ret;
+}
+
+//crash_fw_log
+static const struct file_operations fw_crash_log_ops = {
+	.read = fw_crash_log_read,
+	.open = simple_open,
+	.llseek = default_llseek,
+};
+
 static ssize_t set_tsf_read(struct file *file, char __user *user_buf,
 			           size_t count, loff_t *ppos)
 {
@@ -1606,11 +1638,12 @@ static ssize_t get_versions_extended_read(struct file *file,
 	char all_versions_str [MAX_VERSIONS_EXTENDED_LEN];
 
 	sprintf(all_versions_str, "Driver Version: %u.%u.%u.%u\n"
-		"Firmware Version: %u.%u.%u.%u\nPhy Version: %u.%u.%u.%u.%u.%u", 
+		"Firmware Version: %u.%u.%u.%u\nPhy Version: %u.%u.%u.%u.%u.%u.%u.%u", 
 		driver_ver->major_version, driver_ver->minor_version,
 		driver_ver->api_version, driver_ver->build_version,
 		fw_ver->major_version, fw_ver->minor_version,
-		fw_ver->api_version, fw_ver->build_version, 
+		fw_ver->api_version, fw_ver->build_version,
+		fw_ver->phy_version[7], fw_ver->phy_version[6],	
 		fw_ver->phy_version[5], fw_ver->phy_version[4],	
 		fw_ver->phy_version[3], fw_ver->phy_version[2],
 		fw_ver->phy_version[1], fw_ver->phy_version[0]);
@@ -2072,6 +2105,7 @@ int cc33xx_debugfs_add_files(struct cc33xx *wl,
 	DEBUGFS_ADD(fw_stats_raw, rootdir);
 	DEBUGFS_ADD(sleep_auth, rootdir);
 	DEBUGFS_ADD(ble_enable, rootdir);
+	DEBUGFS_ADD(fw_crash_log, rootdir);
 	DEBUGFS_ADD(set_tsf, rootdir);
 	DEBUGFS_ADD(twt_action, rootdir);
 	DEBUGFS_ADD(fw_logger, rootdir);

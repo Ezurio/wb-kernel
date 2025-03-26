@@ -18,7 +18,7 @@ struct cc33xx_conf_header {
 } __attribute__((__packed__));
 
 #define CC33XX_CONF_MAGIC	0x10e100ca
-#define CC33XX_CONF_VERSION	0x010700e1
+#define CC33XX_CONF_VERSION	0x0107010c
 #define CC33XX_CONF_MASK	0x0000ffff
 #define CC33X_CONF_SIZE	(sizeof(struct cc33xx_conf_file))
 
@@ -601,6 +601,7 @@ struct cc33xx_core_conf {
 	uint8_t disable_beamforming_fftp; // for PG version 2.0
 	uint32_t BleUartBaudrate;
 	uint8_t enable_FlowCtrl;
+	int8_t ble_default_tx_power;
 	uint8_t listen_interval;
 	uint8_t wake_up_event;
 	uint8_t suspend_listen_interval;
@@ -610,6 +611,8 @@ struct cc33xx_core_conf {
 	uint32_t internalSlowclk_OpenWindowLonger;
 	uint32_t externalSlowclk_wakeupEarlier;
 	uint32_t externalSlowclk_OpenWindowLonger;
+	uint32_t slowclk_sampledCycles;
+	uint32_t mx_slowclk_source;
 	struct conf_coex_configuration coex_configuration;
 	/* Prevent HW recovery. FW will remain stuck. */
 	uint8_t no_recovery;
@@ -618,6 +621,7 @@ struct cc33xx_core_conf {
 	uint8_t sramLdo_voltageTrimming;
 	uint32_t xtal_SettlingTime_usec;
 	uint8_t max_rx_ampdu_len;
+    uint32_t country_code;
 	struct conf_ant_diversity ant_diversity;
 	struct conf_iomux_configuration iomux_configuration;
 } __attribute__((__packed__));
@@ -659,12 +663,17 @@ struct cc33xx_host_conf {
 	struct conf_fwlog fwlog;
 } __attribute__((__packed__));
 
+struct cc33xx_crc_conf {
+	uint32_t userChecksum;
+} __attribute__((__packed__));
+
 struct cc33xx_conf_file {
 	struct cc33xx_conf_header header;
 	struct cc33xx_phy_conf phy;
 	struct cc33xx_mac_conf mac;
 	struct cc33xx_core_conf core;
 	struct cc33xx_host_conf host_conf;
+	struct cc33xx_crc_conf crc_conf;
 } __attribute__((__packed__));
 
 

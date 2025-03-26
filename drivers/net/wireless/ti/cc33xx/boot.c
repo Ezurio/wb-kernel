@@ -324,6 +324,29 @@ static int get_device_info(struct cc33xx *wl)
 	return 0;
 }
 
+static int get_device_info_ram_loader(struct cc33xx *wl)
+{
+	int ret; 
+	union hw_info hw_info;
+	u64 mac_address;
+
+	ret = cmd_get_device_info(wl, hw_info.bytes, sizeof hw_info.bytes);
+	if (ret < 0)
+		return ret;
+
+	mac_address = hw_info.bitmap.mac_address;
+
+	wl->efuse_mac_address[5] = (u8) (mac_address);
+	wl->efuse_mac_address[4] = (u8) (mac_address >> 8);
+	wl->efuse_mac_address[3] = (u8) (mac_address >> 16);
+	wl->efuse_mac_address[2] = (u8) (mac_address >> 24);
+	wl->efuse_mac_address[1] = (u8) (mac_address >> 32);
+	wl->efuse_mac_address[0] = (u8) (mac_address >> 40);
+
+
+	return 0;
+}
+
 int cc33xx_init_fw(struct cc33xx *wl)
 {
 	int ret;

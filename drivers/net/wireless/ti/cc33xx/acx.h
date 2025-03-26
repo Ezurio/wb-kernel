@@ -306,30 +306,30 @@ struct ap_rates_class_cfg {
 	u8 role_id;
 	__le32 basic_rates_set;
 	__le32 supported_rates;
-    u8 padding[3];
+	u8 padding[3];
 }__packed;
 
 struct tx_param_cfg {
-    struct acx_header header;
+	struct acx_header header;
 
-    u8 role_id;
-    u8 ac;
-    u8 aifsn;
-    u8 cw_min;
+	u8 role_id;
+	u8 ac;
+	u8 aifsn;
+	u8 cw_min;
 
-    __le16 cw_max;
-    __le16 tx_op_limit;
+	__le16 cw_max;
+	__le16 tx_op_limit;
 
-    __le16 acm;
+	__le16 acm;
 
-    u8 ps_scheme;
+	u8 ps_scheme;
 
-    u8 is_mu_edca;
-    u8 mu_edca_aifs;
-    u8 mu_edca_ecw_min_max;
-    u8 mu_edca_timer;
+	u8 is_mu_edca;
+	u8 mu_edca_aifs;
+	u8 mu_edca_ecw_min_max;
+	u8 mu_edca_timer;
 
-    u8 reserved[1];
+	u8 reserved[1];
 
 } __packed;
 
@@ -357,8 +357,8 @@ struct cc33xx_acx_fw_versions {
 	__le16 api_version;
 	__le16 build_version;
 
-	u8 phy_version[6];
-	u8 padding[2];
+	u8 phy_version[8];
+	//u8 padding[0];
 } __packed;
 
 /* TODO: maybe this needs to be moved somewhere else? */
@@ -558,7 +558,10 @@ typedef enum {
 	TWT_RESUME			= 25,
 	ANT_DIV_ENABLE			= 26,
 	ANT_DIV_SET_RSSI_THRESHOLD	= 27,
-	ANT_DIV_SELECT_DEFAULT_ANTENNA 	= 28,
+	ANT_DIV_SELECT_DEFAULT_ANTENNA	= 28,
+	RESET_DECRYPT_PACKETS_COUNT	= 29,
+	ENABLE_CHANNEL_UTILIZATION_NEXT_SCAN = 30,
+	SET_SEED_CFG		= 31,
 
 	LAST_CFG_VALUE			,
 	MAX_DOT11_CFG = LAST_CFG_VALUE	,
@@ -904,7 +907,7 @@ struct acx_preamble_and_tx_rate {
 
 static const u16 cc33xx_idx_to_rate_100Kbps[] = 
 {
-    10, 20, 55, 110, 60, 90, 120, 180, 240, 360, 480, 540
+	10, 20, 55, 110, 60, 90, 120, 180, 240, 360, 480, 540
 };
 
 struct cc33xx_coex_statistics {
@@ -954,21 +957,21 @@ struct cc33xx_acx_coex_statistics_cfg {
 struct acx_diversity_status {
 	struct acx_header header;
 
-    u8 enable;
+	u8 enable;
 	u8 padding[3];
 } __packed;
 
 struct acx_diversity_rssi_threshold {
 	struct acx_header header;
 
-    s8 rssi_threshold;
+	s8 rssi_threshold;
 	u8 padding[3];
 } __packed;
 
 struct acx_diversity_default_antenna {
 	struct acx_header header;
 
-    u8 default_antenna;
+	u8 default_antenna;
 	u8 padding[3];
 } __packed;
 
@@ -980,7 +983,7 @@ int cc33xx_acx_sleep_auth(struct cc33xx *wl, u8 sleep_auth);
 int cc33xx_ble_enable(struct cc33xx *wl, u8 ble_enable);
 int cc33xx_acx_tx_power(struct cc33xx *wl, struct cc33xx_vif *wlvif, int power);
 int cc33xx_acx_slot(struct cc33xx *wl, struct cc33xx_vif *wlvif,
-		    enum acx_slot_type slot_time);
+			enum acx_slot_type slot_time);
 int cc33xx_acx_group_address_tbl(struct cc33xx *wl, struct cc33xx_vif *wlvif,
 				 bool enable, void *mc_list, u32 mc_list_len);
 int cc33xx_acx_beacon_filter_opt(struct cc33xx *wl, struct cc33xx_vif *wlvif,
@@ -989,7 +992,7 @@ int cc33xx_acx_beacon_filter_table(struct cc33xx *wl, struct cc33xx_vif *wlvif);
 int cc33xx_assoc_info_cfg(struct cc33xx *wl, struct cc33xx_vif *wlvif,
 			  struct ieee80211_sta *sta,u16 aid);
 int cc33xx_acx_set_preamble(struct cc33xx *wl, struct cc33xx_vif *wlvif,
-			    enum acx_preamble_type preamble);
+				enum acx_preamble_type preamble);
 int cc33xx_acx_cts_protect(struct cc33xx *wl, struct cc33xx_vif *wlvif,
 			   enum acx_ctsprotect_type ctsprotect);
 int cc33xx_tx_param_cfg(struct cc33xx *wl, struct cc33xx_vif *wlvif, u8 ac,
@@ -1004,25 +1007,25 @@ int cc33xx_acx_set_ht_information(struct cc33xx *wl, struct cc33xx_vif *wlvif,
 				  u16 ht_operation_mode, u32 he_oper_params,
 				  u16 he_oper_nss_set);
 int cc33xx_acx_set_ba_receiver_session(struct cc33xx *wl, u8 tid_index, u16 ssn,
-				       bool enable, u8 peer_hlid, u8 win_size);
+					   bool enable, u8 peer_hlid, u8 win_size);
 int cc33xx_acx_static_calibration_configure(struct cc33xx *wl,
-					    struct calibration_file_header *file_header,
-					    u8 *calibration_entry_ptr,
-					    bool valid_data);
+						struct calibration_file_header *file_header,
+						u8 *calibration_entry_ptr,
+						bool valid_data);
 int wlcore_acx_get_tx_rate(struct cc33xx *wl, struct cc33xx_vif *wlvif,
 			   struct station_info *sinfo);
 int wlcore_acx_average_rssi(struct cc33xx *wl,
-			    struct cc33xx_vif *wlvif, s8 *avg_rssi);
+				struct cc33xx_vif *wlvif, s8 *avg_rssi);
 int cc33xx_acx_default_rx_filter_enable(struct cc33xx *wl, bool enable,
 					enum rx_filter_action action);
 int cc33xx_acx_set_rx_filter(struct cc33xx *wl, u8 index, bool enable,
-			     struct cc33xx_rx_filter *filter);
+				 struct cc33xx_rx_filter *filter);
 int cc33xx_acx_clear_statistics(struct cc33xx *wl);
 int cc33xx_acx_set_peer_cap(struct cc33xx *wl,
-			    struct ieee80211_sta_ht_cap *ht_cap,
-			    struct ieee80211_sta_he_cap *he_cap,
-			    struct cc33xx_vif *wlvif, bool allow_ht_operation,
-			    u32 rate_set, u8 hlid);
+				struct ieee80211_sta_ht_cap *ht_cap,
+				struct ieee80211_sta_he_cap *he_cap,
+				struct cc33xx_vif *wlvif, bool allow_ht_operation,
+				u32 rate_set, u8 hlid);
 int cc33xx_acx_set_antenna_select(struct cc33xx *wl, u8 selection);
 int cc33xx_acx_set_tsf(struct cc33xx *wl, u64 tsf_val);
 int cc33xx_acx_trigger_fw_assert(struct cc33xx *wl);
