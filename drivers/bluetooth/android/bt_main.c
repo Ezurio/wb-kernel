@@ -176,7 +176,7 @@ bt_recv_frame(bt_private *priv, struct sk_buff *skb)
  *
  *  @return    pointer to structure mbt_dev or NULL
  */
-struct mbt_dev *
+static struct mbt_dev *
 alloc_mbt_dev(void)
 {
 	struct mbt_dev *mbt_dev;
@@ -197,7 +197,7 @@ alloc_mbt_dev(void)
  *
  *  @return    pointer to structure debug_level or NULL
  */
-struct debug_dev *
+static struct debug_dev *
 alloc_debug_dev(void)
 {
 	struct debug_dev *debug_dev;
@@ -684,7 +684,7 @@ exit:
  *
  *  @return   		    0 --success otherwise fail
  */
-int
+static int
 bt_save_dump_info_to_file(char *dir_name, char *file_name, u8 *buf, u32 buf_len)
 {
 	int ret = BT_STATUS_SUCCESS;
@@ -806,7 +806,7 @@ typedef enum {
  *
  *  @return         MLAN_STATUS_SUCCESS
  */
-rdwr_status
+static rdwr_status
 bt_cmd52_rdwr_firmware(bt_private *priv, u8 doneflag)
 {
 	int ret = 0;
@@ -1067,7 +1067,7 @@ bt_queue_frame(bt_private *priv, struct sk_buff *skb)
  *
  *  @return	       BT_STATUS_SUCCESS or BT_STATUS_FAILURE
  */
-int
+static int
 bt_send_reset_command(bt_private *priv)
 {
 	struct sk_buff *skb = NULL;
@@ -1122,7 +1122,7 @@ exit:
  *  @param subcmd  sub command
  *  @return    BT_STATUS_SUCCESS or BT_STATUS_FAILURE
  */
-int
+static int
 bt_send_module_cfg_cmd(bt_private *priv, int subcmd)
 {
 	struct sk_buff *skb = NULL;
@@ -1223,7 +1223,7 @@ exit:
  *  @param priv    A pointer to bt_private structure
  *  @return    BT_STATUS_SUCCESS or BT_STATUS_FAILURE
  */
-int
+static int
 bt_enable_ps(bt_private *priv)
 {
 	struct sk_buff *skb = NULL;
@@ -1278,7 +1278,7 @@ exit:
  *  @param priv    A pointer to bt_private structure
  *  @return    BT_STATUS_SUCCESS or BT_STATUS_FAILURE
  */
-int
+static int
 bt_send_hscfg_cmd(bt_private *priv)
 {
 	struct sk_buff *skb = NULL;
@@ -1326,7 +1326,7 @@ exit:
  *  @param priv    A pointer to bt_private structure
  *  @return    BT_STATUS_SUCCESS or BT_STATUS_FAILURE
  */
-int
+static int
 bt_send_sdio_pull_ctrl_cmd(bt_private *priv)
 {
 	struct sk_buff *skb = NULL;
@@ -1497,7 +1497,7 @@ exit:
  *
  *  @return    BT_STATUS_SUCCESS or BT_STATUS_FAILURE
  */
-int
+static int
 bt_set_evt_filter(bt_private *priv)
 {
 	struct sk_buff *skb = NULL;
@@ -1545,7 +1545,7 @@ exit:
  *
  *  @return    BT_STATUS_SUCCESS or BT_STATUS_FAILURE
  */
-int
+static int
 bt_enable_write_scan(bt_private *priv)
 {
 	struct sk_buff *skb = NULL;
@@ -1591,7 +1591,7 @@ exit:
  *
  *  @return    BT_STATUS_SUCCESS or BT_STATUS_FAILURE
  */
-int
+static int
 bt_enable_device_under_testmode(bt_private *priv)
 {
 	struct sk_buff *skb = NULL;
@@ -1636,7 +1636,7 @@ exit:
  *  @param priv    A pointer to bt_private structure
  *  @return    BT_STATUS_SUCCESS or BT_STATUS_FAILURE
  */
-int
+static int
 bt_enable_test_mode(bt_private *priv)
 {
 	int ret = BT_STATUS_SUCCESS;
@@ -1745,7 +1745,7 @@ exit:
  *
  *  @return    BT_STATUS_SUCCESS or BT_STATUS_FAILURE
  */
-int
+static int
 bt_set_ble_deepsleep(bt_private *priv, int mode)
 {
 	struct sk_buff *skb = NULL;
@@ -1792,7 +1792,7 @@ exit:
  *
  *  @return    BT_STATUS_SUCCESS or BT_STATUS_FAILURE
  */
-int
+static int
 bt_get_fw_version(bt_private *priv)
 {
 	struct sk_buff *skb = NULL;
@@ -2067,7 +2067,7 @@ exit:
  *  @param priv    A pointer to bt_private structure
  *  @return        N/A
  */
-void
+static void
 bt_restore_tx_queue(bt_private *priv)
 {
 	struct sk_buff *skb = NULL;
@@ -2915,7 +2915,7 @@ mdev_notify(struct m_dev *m_dev, unsigned int arg)
  *
  *  @return    BT_STATUS_SUCCESS  or other
  */
-void
+static void
 mdev_query(struct m_dev *m_dev, void *arg)
 {
 	struct mbt_dev *mbt_dev = (struct mbt_dev *)m_dev->dev_pointer;
@@ -2934,7 +2934,7 @@ mdev_query(struct m_dev *m_dev, void *arg)
  *
  *  @return    BT_STATUS_SUCCESS  or other
  */
-void
+static void
 init_m_dev(struct m_dev *m_dev)
 {
 	m_dev->dev_pointer = NULL;
@@ -3179,7 +3179,7 @@ bt_priv_put(bt_private *priv)
  *  @param priv   A pointer to bt_private structure
  *  @return       BT_STATUS_SUCESS/BT_STATUS_FAILURE
  */
-int
+static int
 bt_init_cmd(bt_private *priv)
 {
 	int ret = BT_STATUS_SUCCESS;
@@ -3246,7 +3246,7 @@ done:
  *  @param priv   A pointer to bt_private structure
  *  @return       BT_STATUS_SUCESS/BT_STATUS_FAILURE
  */
-int
+static int
 bt_reinit_fw(bt_private *priv)
 {
 	int ret = BT_STATUS_SUCCESS;
@@ -3662,7 +3662,7 @@ err_kmalloc:
  *  @param priv    A pointer to bt_private
  *  @return        N/A
  */
-void
+static void
 bt_send_hw_remove_event(bt_private *priv)
 {
 	struct sk_buff *skb = NULL;

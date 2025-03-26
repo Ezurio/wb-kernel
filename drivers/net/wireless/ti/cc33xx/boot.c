@@ -8,6 +8,7 @@
  */
 
 #include <linux/firmware.h>
+#include <linux/vmalloc.h>
 
 #include "boot.h"
 #include "cmd.h"

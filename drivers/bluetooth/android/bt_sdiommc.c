@@ -88,7 +88,7 @@ extern bt_private *m_priv[];
  *  @param priv    A pointer to bt_private structure
  *  @return        BT_STATUS_SUCCESS or BT_STATUS_FAILURE
  */
-int
+static int
 sd_get_rx_unit(bt_private *priv)
 {
 	int ret = BT_STATUS_SUCCESS;
@@ -393,7 +393,7 @@ sd_read_reg(bt_private *priv, int reg, u8 *data)
  *  @param data		Data
  *  @return         BT_STATUS_SUCCESS or other error no.
  */
-int
+static int
 sd_f0_read_reg(bt_private *priv, int reg, u8 *data)
 {
 	int ret = BT_STATUS_SUCCESS;
@@ -473,7 +473,7 @@ done:
  *  @param pollnum  Number of times to poll fw status
  *  @return         BT_STATUS_SUCCESS or BT_STATUS_FAILURE
  */
-int
+static int
 sd_verify_fw_download(bt_private *priv, int pollnum)
 {
 	int ret = BT_STATUS_FAILURE;
@@ -1165,7 +1165,7 @@ done:
  *  @param val    Winner status (0: winner)
  *  @return       BT_STATUS_SUCCESS or BT_STATUS_FAILURE
  */
-int
+static int
 sd_check_winner_status(bt_private *priv, u8 *val)
 {
 
@@ -1194,7 +1194,7 @@ sd_check_winner_status(bt_private *priv, u8 *val)
  *  @param priv    A pointer to bt_private structure
  *  @return        None
  */
-void
+static void
 bt_is_suspended(bt_private *priv)
 {
 	struct sdio_mmc_card *card = priv->bt_dev.card;
@@ -1208,7 +1208,7 @@ bt_is_suspended(bt_private *priv)
  *  @param dev	   A pointer to device structure
  *  @return        BT_STATUS_SUCCESS or other error no.
  */
-int
+static int
 bt_sdio_suspend(struct device *dev)
 {
 	struct sdio_func *func = dev_to_sdio_func(dev);
@@ -1282,7 +1282,7 @@ bt_sdio_suspend(struct device *dev)
 	}
 }
 
-void
+static void
 bt_sdio_shutdown(struct device *dev)
 {
 	struct sdio_func *func = dev_to_sdio_func(dev);
@@ -1333,7 +1333,7 @@ bt_sdio_shutdown(struct device *dev)
  *  @param dev	   A pointer to device structure
  *  @return        BT_STATUS_SUCCESS
  */
-int
+static int
 bt_sdio_resume(struct device *dev)
 {
 	struct sdio_func *func = dev_to_sdio_func(dev);

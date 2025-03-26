@@ -242,8 +242,7 @@ ieee80211_determine_ap_chan(struct ieee80211_sub_if_data *sdata,
 	ieee80211_chandef_ht_oper(ht_oper, chandef);
 
 	if (conn->mode < IEEE80211_CONN_MODE_VHT)
-		}
-		ret = IEEE80211_CONN_DISABLE_VHT;
+		return IEEE80211_CONN_MODE_HT;
 
 	vht_chandef = *chandef;
 
@@ -2637,8 +2636,6 @@ ieee80211_sta_process_chanswitch(struct ieee80211_link_data *link,
 	 */
 	link->conf->csa_active = true;
 	link->u.mgd.csa.blocked_tx = csa_ie.mode;
-	sdata->csa_blocked_queues =
-		csa_ie.mode && !ieee80211_hw_check(&local->hw, HANDLES_QUIET_CSA);
 
 	wiphy_work_queue(sdata->local->hw.wiphy,
 			 &ifmgd->csa_connection_drop_work);

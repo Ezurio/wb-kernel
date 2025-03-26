@@ -22,6 +22,7 @@
 
 #include <linux/debugfs.h>
 #include <linux/scatterlist.h>
+#include <linux/module.h>
 #include <crypto/internal/cipher.h>
 #include <crypto/hash.h>
 #include <crypto/kpp.h>

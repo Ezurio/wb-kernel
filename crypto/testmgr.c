@@ -5126,9 +5126,9 @@ static const struct alg_test_desc alg_test_descs[] = {
 		.suite = {
 			.drbg = __VECS(drbg_nopr_hmac_sha512_tv_template)
 		}
-	}, {
 #endif
 #if IS_ENABLED(CONFIG_CRYPTO_DRBG_HASH)
+	}, {
 		.alg = "drbg_nopr_sha256",
 		.test = alg_test_drbg,
 		.fips_allowed = 1,
@@ -5179,9 +5179,9 @@ static const struct alg_test_desc alg_test_descs[] = {
 		.alg = "drbg_pr_hmac_sha512",
 		.test = alg_test_null,
 		.fips_allowed = 1,
+	}, {
 #endif
 #if IS_ENABLED(CONFIG_CRYPTO_DRBG_HASH)
-	}, {
 		.alg = "drbg_pr_sha256",
 		.test = alg_test_drbg,
 		.fips_allowed = 1,
@@ -5957,7 +5957,6 @@ static const struct alg_test_desc alg_test_descs[] = {
 			.hash = __VECS(sha512_tv_template)
 		}
 	}, {
-#endif
 #if IS_ENABLED(CONFIG_CRYPTO_SM3)
 		.alg = "sm3",
 		.test = alg_test_hash,

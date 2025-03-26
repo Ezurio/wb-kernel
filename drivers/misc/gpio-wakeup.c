@@ -13,7 +13,7 @@
 #include <linux/irq.h>
 #include <linux/suspend.h>
 #include <linux/platform_device.h>
-#include <linux/of_platform.h>
+#include <linux/of.h>
 
 struct wkup_priv {
 	int irq;
@@ -122,7 +122,7 @@ static int gpio_wakeup_probe(struct platform_device *pdev)
 	return 0;
 }
 
-static int gpio_wakeup_remove(struct platform_device *pdev)
+static void gpio_wakeup_remove(struct platform_device *pdev)
 {
 	struct gpio_wakeup_priv *priv = platform_get_drvdata(pdev);
 	int i;
@@ -131,10 +131,9 @@ static int gpio_wakeup_remove(struct platform_device *pdev)
 		wakeup_source_unregister(priv->wkup[i].wks);
 
 	device_init_wakeup(&pdev->dev, false);
-
-	return 0;
 }
 
+#if IS_ENABLED(CONFIG_PM)
 static int gpio_wakeup_suspend(struct device *dev)
 {
 	struct gpio_wakeup_priv *priv = dev_get_drvdata(dev);
@@ -165,11 +164,10 @@ static int gpio_wakeup_resume(struct device *dev)
 
 	return 0;
 }
+#endif
 
-static const struct dev_pm_ops gpio_wakeup_pm_ops = {
-	.suspend  = gpio_wakeup_suspend,
-	.resume   = gpio_wakeup_resume,
-};
+static DEFINE_SIMPLE_DEV_PM_OPS(gpio_wakeup_pm_ops, gpio_wakeup_suspend,
+	gpio_wakeup_resume);
 
 static const struct of_device_id gpio_wakeup_of_match[] = {
 	{ .compatible = "gpio-wakeup", },
@@ -179,7 +177,7 @@ MODULE_DEVICE_TABLE(of, gpio_wakeup_of_match);
 
 static struct platform_driver gpio_wakeup_driver = {
 	.probe	= gpio_wakeup_probe,
-	.remove	= gpio_wakeup_remove,
+	.remove_new	= gpio_wakeup_remove,
 	.driver	= {
 		.name	= "gpio-wakeup",
 		.owner	= THIS_MODULE,

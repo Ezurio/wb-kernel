@@ -161,7 +161,7 @@ static struct item_data debug_items[] = {
  *  @param s	pointer to numbered string
  *  @return	converted number from string s
  */
-int
+static int
 string_to_number(char *s)
 {
 	int r = 0;

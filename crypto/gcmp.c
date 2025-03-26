@@ -33,6 +33,8 @@ struct crypto_gcmp_req_ctx {
 	struct aead_request subreq;
 };
 
+void crypto_gcmp_set_if_name(struct crypto_aead *parent, char *ifname);
+
 void crypto_gcmp_set_if_name(struct crypto_aead *parent, char *ifname)
 {
 	struct crypto_gcmp_ctx *ctx = crypto_aead_ctx(parent);

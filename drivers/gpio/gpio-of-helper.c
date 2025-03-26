@@ -192,7 +192,7 @@ static int gpio_of_helper_probe(struct platform_device *pdev)
 	return 0;
 }
 
-static int gpio_of_helper_remove(struct platform_device *pdev)
+static void gpio_of_helper_remove(struct platform_device *pdev)
 {
 	struct device *dev = &pdev->dev;
 	struct gpio_helper_info *info = platform_get_drvdata(pdev);
@@ -204,8 +204,6 @@ static int gpio_of_helper_remove(struct platform_device *pdev)
 	}
 
 	device_remove_file(dev, &dev_attr_status);
-
-	return 0;
 }
 
 #ifdef CONFIG_PM_SLEEP
@@ -227,7 +225,7 @@ static SIMPLE_DEV_PM_OPS(gpio_of_helper_pm_ops, gpio_of_helper_suspend,
 
 struct platform_driver gpio_of_helper_driver = {
 	.probe		= gpio_of_helper_probe,
-	.remove		= gpio_of_helper_remove,
+	.remove_new	= gpio_of_helper_remove,
 	.driver = {
 		.name		= "gpio-of-helper",
 		.pm		= &gpio_of_helper_pm_ops,

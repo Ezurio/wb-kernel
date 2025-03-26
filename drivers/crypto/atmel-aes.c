@@ -3386,7 +3386,6 @@ err_aes_xts_alg:
 		crypto_unregister_aead(&aes_gcm_alg);
 
 err_aes_gcm_alg:
-
 	crypto_unregister_skciphers(aes_algs, ARRAY_SIZE(aes_algs));
 
 err_aes_algs:

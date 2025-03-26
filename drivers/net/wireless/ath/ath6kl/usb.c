@@ -1257,7 +1257,7 @@ static int ath6kl_usb_init_gpio(void)
 		/* Request the reset GPIO, and assert it to make sure we get a
 		 * clean boot in-case we had a floating input or other issue.
 		 */
-		ret = gpio_request_one(reset_pwd_gpio, GPIOF_INIT_LOW, "WIFI_RESET");
+		ret = gpio_request_one(reset_pwd_gpio, GPIOF_OUT_INIT_LOW, "WIFI_RESET");
 		if (ret) {
 			ath6kl_err("Unable to get WIFI power gpio: %d\n", ret);
 			return ret;

@@ -149,16 +149,6 @@ struct rand_data {
 #include <linux/minmax.h>
 #include "jitterentropy.h"
 
-#include <linux/module.h>
-
-static bool fips_fail_jent_apt_insert = 0;
-module_param(fips_fail_jent_apt_insert, bool, 0444);
-MODULE_PARM_DESC(fips_fail_jent_apt_insert, "FIPS testing: force jent_apt_insert() health test to fail.");
-
-static bool fips_fail_jent_rct_insert = 0;
-module_param(fips_fail_jent_rct_insert, bool, 0444);
-MODULE_PARM_DESC(fips_fail_jent_rct_insert, "FIPS testing: force jent_rct_insert() health test to fail.");
-
 /***************************************************************************
  * Adaptive Proportion Test
  *

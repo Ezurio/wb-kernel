@@ -484,7 +484,7 @@ struct cc33xx_acx_static_calibration_cfg {
 	u8 payload_struct_version;
 	u8 padding;
 	struct calibration_header_fw calibration_header;
-	u8  payload[0];
+	u8  payload[];
 	
 } __packed;
 
@@ -514,7 +514,7 @@ struct acx_rx_filter_cfg {
 	u8 action;
 
 	u8 num_fields;
-	u8 fields[0];
+	u8 fields[];
 } __packed;
 
 struct acx_roaming_stats {

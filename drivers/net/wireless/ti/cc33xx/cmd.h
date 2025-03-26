@@ -177,7 +177,7 @@ struct cc33xx_cmd_header {
 	__le16 status;
 
 	/* payload */
-	u8 data[0];
+	u8 data[];
 } __packed;
 
 #define CC33XX_CMD_MAX_PARAMS 572
@@ -261,7 +261,7 @@ struct command_complete_header {
 	__le16 status;
 
 	/* payload */
-	u8 data[0];
+	u8 data[];
 } __packed;
 
 struct cc33xx_cmd_complete_role_enable {
@@ -739,13 +739,13 @@ struct cc33xx_cmd_ini_params_download
 {
 	struct cc33xx_cmd_header header;
 	__le32 length;
-	u8 payload[0];
+	u8 payload[];
 }__packed;
 
 struct cc33xx_cmd_container_download {
 	struct cc33xx_cmd_header header;
 	__le32 length;
-	u8 payload[0];
+	u8 payload[];
 } __packed;
 
 struct cc33xx_cmd_get_device_info {

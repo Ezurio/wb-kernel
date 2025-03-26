@@ -134,7 +134,7 @@ void flush_deferred_event_list(struct cc33xx *wl)
 	}
 }
 
-int wait_for_event_or_timeout(struct cc33xx *wl, u32 mask, bool *timeout)
+static int wait_for_event_or_timeout(struct cc33xx *wl, u32 mask, bool *timeout)
 {
 	u32 event;
 	unsigned long timeout_time;
@@ -197,7 +197,7 @@ int cc33xx_wait_for_event(struct cc33xx *wl, enum wlcore_wait_event event,
 	return wait_for_event_or_timeout(wl, local_event, timeout);
 }
 
-void wlcore_event_sched_scan_completed(struct cc33xx *wl, u8 status)
+static void wlcore_event_sched_scan_completed(struct cc33xx *wl, u8 status)
 {
 	cc33xx_debug(DEBUG_EVENT,
 		     "PERIODIC_SCAN_COMPLETE_EVENT (status 0x%0x)", status);
@@ -213,7 +213,7 @@ void wlcore_event_sched_scan_completed(struct cc33xx *wl, u8 status)
 	
 }
 
-void cc33xx_event_channel_switch(struct cc33xx *wl,
+static void cc33xx_event_channel_switch(struct cc33xx *wl,
 				 unsigned long roles_bitmap,
 				 bool success)
 {
@@ -235,11 +235,11 @@ void cc33xx_event_channel_switch(struct cc33xx *wl,
 		vif = cc33xx_wlvif_to_vif(wlvif);
 
 		if (wlvif->bss_type == BSS_TYPE_STA_BSS) {
-			ieee80211_chswitch_done(vif, success);
+			ieee80211_chswitch_done(vif, success, 0);
 			cancel_delayed_work(&wlvif->channel_switch_work);
 		} else {
 			set_bit(WLVIF_FLAG_BEACON_DISABLED, &wlvif->flags);
-			ieee80211_csa_finish(vif);
+			ieee80211_csa_finish(vif, 0);
 		}
 	}
 }

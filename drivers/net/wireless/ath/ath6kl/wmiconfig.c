@@ -18,6 +18,7 @@
 #include "testmode.h"
 #include "debug.h"
 #include "wmi.h"
+#include "wmiconfig.h"
 
 #include <net/netlink.h>
 

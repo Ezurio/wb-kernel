@@ -679,6 +679,7 @@ void cc33xx_scan_sched_scan_stop(struct cc33xx *wl,
 	__cc33xx_scan_stop(wl, wlvif, SCAN_REQUEST_CONNECT_PERIODIC_SCAN);
 }
 
+static 
 int cc33xx_scan_start(struct cc33xx *wl, struct cc33xx_vif *wlvif,
 		      struct cfg80211_scan_request *req)
 {
@@ -775,7 +776,7 @@ int wlcore_scan(struct cc33xx *wl, struct ieee80211_vif *vif, const u8 *ssid,
 	return 0;
 }
 
-void inline wlcore_scan_sched_scan_results(struct cc33xx *wl)
+inline void wlcore_scan_sched_scan_results(struct cc33xx *wl)
 {
 	cc33xx_debug(DEBUG_SCAN, "got periodic scan results");
 

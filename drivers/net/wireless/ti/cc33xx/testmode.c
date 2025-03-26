@@ -217,6 +217,7 @@ static int cc33xx_tm_cmd_configure(struct cc33xx *wl, struct nlattr *tb[])
 	return 0;
 }
 
+static
 int cc33xx_plt_init(struct cc33xx *wl)
 {
 	/* PLT init: Role enable + Role start + plt Init  */
@@ -257,6 +258,7 @@ out:
 	return ret;
 }
 
+static
 int cc33xx_plt_start(struct cc33xx *wl, const enum plt_mode plt_mode)
 {
 	int ret = 0;

@@ -261,7 +261,7 @@ done:
  *    @param line_pos     Destination data
  *    @return             -1 or length of the line
  */
-int
+static int
 parse_cfg_get_line(u8 *data, u32 size, u8 *line_pos)
 {
 	static s32 pos;
@@ -297,7 +297,7 @@ parse_cfg_get_line(u8 *data, u32 size, u8 *line_pos)
  *    @param size          data length
  *    @return              BT_STATUS_SUCCESS or BT_STATUS_FAILURE
  */
-int
+static int
 bt_process_init_cfg(bt_private *priv, u8 *data, u32 size)
 {
 	u8 *pos;
@@ -524,7 +524,7 @@ done:
  *    @param mac     mac address buf
  *    @return         BT_STATUS_SUCCESS or BT_STATUS_FAILURE
  */
-int
+static int
 bt_process_cal_cfg(bt_private *priv, u8 *data, u32 size, char *mac)
 {
 	u8 bt_mac[ETH_ALEN];
@@ -567,7 +567,7 @@ done:
  *    @param mac     mac address buf
  *    @return         BT_STATUS_SUCCESS or BT_STATUS_FAILURE
  */
-int
+static int
 bt_process_cal_cfg_ext(bt_private *priv, u8 *data, u32 size)
 {
 	u8 cal_data[128];

@@ -548,7 +548,7 @@ struct brcmf_mp_device *brcmf_get_module_param(struct device *dev,
 
 	// Summit - Copy regulory domain module parameter, subject to
 	// override by DT
-	strlcpy(settings->regdomain, brcmf_regdomain, BRCMF_REGDOMAIN_LEN);
+	strscpy(settings->regdomain, brcmf_regdomain, BRCMF_REGDOMAIN_LEN);
 
 	if (bus_type == BRCMF_BUSTYPE_SDIO)
 		settings->bus.sdio.txglomsz = brcmf_sdiod_txglomsz;

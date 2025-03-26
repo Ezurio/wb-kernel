@@ -493,6 +493,7 @@ static u8 wlcore_get_native_channel_type(u8 nl_channel_type)
 	}
 }
 
+static
 int cc33xx_cmd_role_start_dev(struct cc33xx *wl, struct cc33xx_vif *wlvif,
 			      enum nl80211_band band, int channel)
 {
@@ -1154,6 +1155,7 @@ int cc33xx_cmd_configure(struct cc33xx *wl, u16 id, void *buf, size_t len)
  * @valid_rets: bitmap of valid cmd status codes (i.e. return values).
  * return the cmd status on success.
  */
+static
 int wlcore_cmd_debug_failsafe(struct cc33xx *wl, u16 id, void *buf,
 				  size_t len, unsigned long valid_rets)
 {

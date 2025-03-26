@@ -20,7 +20,7 @@
 #include <linux/suspend.h>
 #include <linux/gpio/consumer.h>
 #include <linux/pinctrl/consumer.h>
-#include <asm/unaligned.h>
+#include <linux/unaligned.h>
 
 #include <net/bluetooth/bluetooth.h>
 #include <net/bluetooth/hci_core.h>
@@ -460,7 +460,7 @@ error:
 	return count;
 }
 
-static int btti_uart_receive_buf(struct serdev_device *serdev, const u8 *data,
+static size_t btti_uart_receive_buf(struct serdev_device *serdev, const u8 *data,
 			      size_t count)
 {
 	struct btti_uart_dev *bdev = serdev_device_get_drvdata(serdev);

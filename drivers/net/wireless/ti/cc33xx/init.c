@@ -14,6 +14,7 @@
 #include "conf.h"
 #include "event.h"
 #include "tx.h"
+#include "init.h"
 
 #define PG2_CHIP_VERSION    2
 

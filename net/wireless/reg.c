@@ -1002,6 +1002,8 @@ static int query_regdb(const char *alpha2)
 }
 
 #ifndef _REMOVE_SUMMIT_MODS_
+int check_regdb(const char *alpha2);
+
 int check_regdb(const char *alpha2)
 {
 	const struct fwdb_header *hdr = regdb;
@@ -1843,6 +1845,11 @@ static void handle_channel_single_rule(struct wiphy *wiphy,
 				chan->dfs_cac_ms = reg_rule->dfs_cac_ms;
 		}
 
+		if (chan->flags & IEEE80211_CHAN_PSD)
+			chan->psd = reg_rule->psd;
+
+#ifndef _REMOVE_SUMMIT_MODS_
+		chan->beacon_found = false;
 #endif
 		return;
 	}

@@ -814,6 +814,7 @@ out:
 	return ret;
 }
 
+static
 int cc33xx_rx_filter_get_fields_size(struct cc33xx_rx_filter *filter)
 {
 	int i, fields_size = 0;
@@ -826,6 +827,7 @@ int cc33xx_rx_filter_get_fields_size(struct cc33xx_rx_filter *filter)
 	return fields_size;
 }
 
+static
 void cc33xx_rx_filter_flatten_fields(struct cc33xx_rx_filter *filter, u8 *buf)
 {
 	int i;

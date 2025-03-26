@@ -566,3 +566,5 @@ config BT_INTEL_PCIE
 	  Say Y here to compiler support for Intel Bluetooth PCIe device into
 	  the kernel or say M to compile it as module (btintel_pcie)
 endmenu
+
+source "drivers/bluetooth/android/Kconfig"

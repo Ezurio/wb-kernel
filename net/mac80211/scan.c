@@ -30,27 +30,27 @@
 #define IEEE80211_PASSIVE_CHANNEL_TIME (HZ / 9)
 
 #ifndef _REMOVE_SUMMIT_MODS_
-static inline int __get_PROBE_DELAY(struct cfg80211_scan_request *scan_req)
+static inline unsigned __get_PROBE_DELAY(struct cfg80211_scan_request *scan_req)
 {
-	int msec = scan_req->probe_delay_time;
+	unsigned msec = scan_req->probe_delay_time;
 	if (0 < msec && msec <= 250)
 		return (HZ * msec + 999) / 1000;
 	return IEEE80211_PROBE_DELAY;
 }
 #undef IEEE80211_PROBE_DELAY
 #define IEEE80211_PROBE_DELAY __get_PROBE_DELAY(scan_req)
-static inline int __get_CHANNEL_TIME(struct cfg80211_scan_request *scan_req)
+static inline unsigned __get_CHANNEL_TIME(struct cfg80211_scan_request *scan_req)
 {
-	int msec = scan_req->duration;
+	unsigned msec = scan_req->duration;
 	if (0 < msec && msec <= 250)
 		return (HZ * msec + 999) / 1000;
 	return IEEE80211_CHANNEL_TIME;
 }
 #undef IEEE80211_CHANNEL_TIME
 #define IEEE80211_CHANNEL_TIME __get_CHANNEL_TIME(scan_req)
-static inline int __get_PASSIVE_CHANNEL_TIME(struct cfg80211_scan_request *scan_req)
+static inline unsigned __get_PASSIVE_CHANNEL_TIME(struct cfg80211_scan_request *scan_req)
 {
-	int msec = scan_req->passive_channel_time;
+	unsigned msec = scan_req->passive_channel_time;
 	if (0 < msec && msec <= 250)
 		return (HZ * msec + 999) / 1000;
 	return IEEE80211_PASSIVE_CHANNEL_TIME;
@@ -58,9 +58,9 @@ static inline int __get_PASSIVE_CHANNEL_TIME(struct cfg80211_scan_request *scan_
 #undef IEEE80211_PASSIVE_CHANNEL_TIME
 #define IEEE80211_PASSIVE_CHANNEL_TIME __get_PASSIVE_CHANNEL_TIME(scan_req)
 // note, this version returns 0 by default, since no macro value available
-static inline int __get_SUSPEND_TIME(struct cfg80211_scan_request *scan_req)
+static inline unsigned __get_SUSPEND_TIME(struct cfg80211_scan_request *scan_req)
 {
-	int msec = scan_req->scan_suspend_time;
+	unsigned msec = scan_req->scan_suspend_time;
 	if (0 < msec && msec <= 250)
 		return (HZ * msec + 999) / 1000;
 	return 0; // caller will fill in default
@@ -1150,7 +1150,7 @@ static void ieee80211_scan_state_suspend(struct ieee80211_local *local,
 #ifndef _REMOVE_SUMMIT_MODS_
 	struct cfg80211_scan_request *scan_req;
 	scan_req = rcu_dereference_protected(local->scan_req,
-					     lockdep_is_held(&local->mtx));
+					     lockdep_is_held(&local->hw.wiphy->mtx));
 #endif
 
 	/* switch back to the operating channel */

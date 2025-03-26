@@ -597,7 +597,7 @@ static const u8 brcm_cypress_patch[] = {
 	0x83, 0xBB, 0x70, 0x47
 };
 
-int btbcm_cypress_apply_patch(struct hci_dev *hdev)
+static int btbcm_cypress_apply_patch(struct hci_dev *hdev)
 {
 	struct sk_buff *skb;
 	int err = 0;

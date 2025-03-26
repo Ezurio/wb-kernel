@@ -596,7 +596,7 @@ static int cc33xx_set_authorized(struct cc33xx *wl, struct cc33xx_vif *wlvif)
 	return 0;
 }
 
-void wlcore_regdomain_config(struct cc33xx *wl)
+static void wlcore_regdomain_config(struct cc33xx *wl)
 {
 	int ret = 0;
 
@@ -1513,11 +1513,13 @@ static int cc33xx_validate_wowlan_pattern(struct cfg80211_pkt_pattern *p)
 	return 0;
 }
 
+static
 struct cc33xx_rx_filter *cc33xx_rx_filter_alloc(void)
 {
 	return kzalloc(sizeof(struct cc33xx_rx_filter), GFP_KERNEL);
 }
 
+static 
 void cc33xx_rx_filter_free(struct cc33xx_rx_filter *filter)
 {
 	int i;
@@ -1531,6 +1533,7 @@ void cc33xx_rx_filter_free(struct cc33xx_rx_filter *filter)
 	kfree(filter);
 }
 
+static 
 int cc33xx_rx_filter_alloc_field(struct cc33xx_rx_filter *filter, u16 offset,
 				 u8 flags, const u8 *pattern, u8 len)
 {
@@ -2043,7 +2046,7 @@ static void cc33xx_turn_off(struct cc33xx *wl)
 	mutex_unlock(&wl->mutex);
 }
 
-static inline void cc33xx_op_stop(struct ieee80211_hw *hw)
+static inline void cc33xx_op_stop(struct ieee80211_hw *hw, bool suspend)
 {
 	cc33xx_debug(DEBUG_MAC80211, "mac80211 stop");
 	return;
@@ -2072,7 +2075,7 @@ static void cc33xx_channel_switch_work(struct work_struct *work)
 		goto out;
 
 	vif = cc33xx_wlvif_to_vif(wlvif);
-	ieee80211_chswitch_done(vif, false);
+	ieee80211_chswitch_done(vif, false, 0);
 
 	cc33xx_cmd_stop_channel_switch(wl, wlvif);
 
@@ -2777,7 +2780,7 @@ static int wlcore_set_assoc(struct cc33xx *wl, struct cc33xx_vif *wlvif,
 	int ret;
 
 	wlvif->aid = vif->cfg.aid;
-	wlvif->channel_type = cfg80211_get_chandef_type(&bss_conf->chandef);
+	wlvif->channel_type = cfg80211_get_chandef_type(&bss_conf->chanctx_conf->def);
 	wlvif->beacon_int = bss_conf->beacon_int;
 	wlvif->wmm_enabled = bss_conf->qos;
 
@@ -2837,7 +2840,7 @@ static int wlcore_unset_assoc(struct cc33xx *wl, struct cc33xx_vif *wlvif)
 		struct ieee80211_vif *vif = cc33xx_wlvif_to_vif(wlvif);
 
 		cc33xx_cmd_stop_channel_switch(wl, wlvif);
-		ieee80211_chswitch_done(vif, false);
+		ieee80211_chswitch_done(vif, false, 0);
 		cancel_delayed_work(&wlvif->channel_switch_work);
 	}
 
@@ -3185,7 +3188,7 @@ static int cc33xx_set_host_cfg_bitmap(struct cc33xx *wl, u32 extra_mem_blk)
 	return 0;
 }
 
-int wlcore_set_key(struct cc33xx *wl, enum set_key_cmd cmd,
+static int wlcore_set_key(struct cc33xx *wl, enum set_key_cmd cmd,
 		   struct ieee80211_vif *vif, struct ieee80211_sta *sta,
 		   struct ieee80211_key_conf *key_conf)
 {
@@ -4035,7 +4038,7 @@ static void cc33xx_bss_info_changed_sta(struct cc33xx *wl,
 
 	/* Handle new association with HT. Do this after join. */
 	if (sta_exists) {
-		bool enabled = bss_conf->chandef.width != 
+		bool enabled = bss_conf->chanctx_conf->def.width != 
 						NL80211_CHAN_WIDTH_20_NOHT;
 		cc33xx_debug(DEBUG_CMD, "+++Debug wlcore_hw_set_peer_cap %x",
 					wlvif->rate_set);
@@ -4881,7 +4884,7 @@ static void cc33xx_op_channel_switch(struct ieee80211_hw *hw,
 
 	if (unlikely(wl->state == WLCORE_STATE_OFF)) {
 		if (test_bit(WLVIF_FLAG_STA_ASSOCIATED, &wlvif->flags))
-			ieee80211_chswitch_done(vif, false);
+			ieee80211_chswitch_done(vif, false, 0);
 		goto out;
 	} else if (unlikely(wl->state != WLCORE_STATE_ON)) {
 		goto out;
@@ -5581,6 +5584,7 @@ static int cc33xx_init_ieee80211(struct cc33xx *wl)
 	alloc_workqueue("%s", __WQ_LEGACY | WQ_FREEZABLE | WQ_UNBOUND |	\
 			WQ_MEM_RECLAIM | WQ_HIGHPRI, 1, (name))
 
+static
 struct ieee80211_hw *wlcore_alloc_hw(u32 aggr_buf_size)
 {
 	struct ieee80211_hw *hw;
@@ -5720,6 +5724,7 @@ err_hw_alloc:
 	return ERR_PTR(ret);
 }
 
+static
 int wlcore_free_hw(struct cc33xx *wl)
 {
 	/* Unblock any fwlog readers */
@@ -5950,7 +5955,7 @@ int wlcore_probe(struct cc33xx *wl, struct platform_device *pdev)
 	return ret;
 }
 
-int wlcore_remove(struct platform_device *pdev)
+static void wlcore_remove(struct platform_device *pdev)
 {
 	struct wlcore_platdev_data *pdev_data = dev_get_platdata(&pdev->dev);
 	struct cc33xx *wl = platform_get_drvdata(pdev);
@@ -5977,7 +5982,6 @@ int wlcore_remove(struct platform_device *pdev)
 
 out:
 	wlcore_free_hw(wl);
-	return 0;
 }
 
 static int cc33xx_load_ini_bin_file(struct device *dev,
@@ -6143,7 +6147,7 @@ MODULE_DEVICE_TABLE(platform, cc33xx_id_table);
 
 static struct platform_driver cc33xx_driver = {
 	.probe		= cc33xx_probe,
-	.remove		= wlcore_remove,
+	.remove_new	= wlcore_remove,
 	.id_table	= cc33xx_id_table,
 	.driver = {
 		.name	= "cc33xx_driver",

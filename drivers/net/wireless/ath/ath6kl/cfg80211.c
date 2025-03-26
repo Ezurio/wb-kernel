@@ -3498,7 +3498,7 @@ ath6kl_mgmt_stypes[NUM_NL80211_IFTYPES] = {
 	},
 };
 
-int ath6kl_cfg80211_get_channel(struct wiphy *wiphy,
+static int ath6kl_cfg80211_get_channel(struct wiphy *wiphy,
 				struct wireless_dev *wdev,
 				unsigned int link_id,
 				struct cfg80211_chan_def *chandef)

@@ -45,7 +45,7 @@ static int mbtchar_major = MBTCHAR_MAJOR_NUM;
  *
  *	@return			kobject structure
  */
-struct kobject *
+static struct kobject *
 chardev_get(struct char_dev *dev)
 {
 	struct kobject *kobj;
@@ -67,7 +67,7 @@ chardev_get(struct char_dev *dev)
  *
  *	@return			N/A
  */
-void
+static void
 chardev_put(struct char_dev *dev)
 {
 	if (dev) {
@@ -202,7 +202,7 @@ out_unlock:
  *	@param f_pos	pointer to loff_t type data
  *	@return			number of bytes written
  */
-ssize_t
+static ssize_t
 chardev_write(struct file * filp, const char *buf, size_t count, loff_t * f_pos)
 {
 	int nwrite = 0;
@@ -282,7 +282,7 @@ exit:
  *	@param f_pos	pointer to loff_t type data
  *	@return			number of bytes read
  */
-ssize_t
+static ssize_t
 chardev_read(struct file * filp, char *buf, size_t count, loff_t * f_pos)
 {
 	struct char_dev *dev = (struct char_dev *)filp->private_data;
@@ -371,7 +371,7 @@ out:
  *	@param arg		contains the arguement
  *	@return			0--success otherwise failure
  */
-long
+static long
 char_ioctl(struct file *filp, unsigned int cmd, void *arg)
 {
 	struct char_dev *dev = (struct char_dev *)filp->private_data;
@@ -407,7 +407,7 @@ char_ioctl(struct file *filp, unsigned int cmd, void *arg)
  *	@param arg		contains the arguement
  *	@return			0--success otherwise failure
  */
-long
+static long
 chardev_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 {
 	return char_ioctl(filp, cmd, (void *)arg);
@@ -422,7 +422,7 @@ chardev_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
  *	@param arg		contains the arguement
  *	@return			0--success otherwise failure
  */
-long
+static long
 chardev_ioctl_compat(struct file *filp, unsigned int cmd, unsigned long arg)
 {
 	return char_ioctl(filp, cmd, compat_ptr(arg));
@@ -436,7 +436,7 @@ chardev_ioctl_compat(struct file *filp, unsigned int cmd, unsigned long arg)
  *	@param filp	pointer to structure file
  *	@return			0--success otherwise failure
  */
-int
+static int
 chardev_open(struct inode *inode, struct file *filp)
 {
 	int ret = 0;
@@ -498,7 +498,7 @@ done:
  *	@param filp	pointer to structure file
  *	@return			0--success otherwise failure
  */
-int
+static int
 chardev_release(struct inode *inode, struct file *filp)
 {
 	int ret = 0;
