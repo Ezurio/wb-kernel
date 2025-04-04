@@ -5908,17 +5908,31 @@ static int read_version_info(struct cc33xx *wl)
 
 static int cc33xx_init_regdb(struct cc33xx *wl)
 {
-	char alpha2[2];
+	char alpha2[3];
+	char * pCountryCode;
 
-	if (regdomain[0] && regdomain[1]) {
-		alpha2[0] = regdomain[0];
-		alpha2[1] = regdomain[1];
-		cc33xx_debug(DEBUG_BOOT, "Using regulatory domain %c%c", alpha2[0], alpha2[1]);
-		regulatory_hint(wl->hw->wiphy, alpha2);
+	memset(alpha2, 0, sizeof(alpha2));
+	if (wl->conf.core.country_code == 0x00) {
+		alpha2[0] = '0';
+		alpha2[1] = '0';
+	} else {
+		// CC stored as uint16_t big endian in a uint32_t variable
+		pCountryCode = (char *)(&wl->conf.core.country_code);
+		alpha2[0] = pCountryCode[1];
+		alpha2[1] = pCountryCode[0];
+
+		if (!isalpha(alpha2[0]) || !isalpha(alpha2[1])) {
+			cc33xx_error("Invalid country code: %c%c",
+				     alpha2[0], alpha2[1]);
+			alpha2[0] = '0';
+			alpha2[1] = '0';
+		}
 	}
-	else {
-		cc33xx_debug(DEBUG_BOOT, "No regulatory domain set");
-	}
+
+	cc33xx_debug(DEBUG_BOOT, "Using regulatory domain %c%c", alpha2[0], alpha2[1]);
+	regulatory_hint(wl->hw->wiphy, alpha2);
+
+	strncpy(regdomain, alpha2, sizeof(regdomain));
 
 	return 0;
 }
@@ -6266,9 +6280,6 @@ MODULE_PARM_DESC(no_recovery, "Prevent HW recovery. FW will remain stuck.");
 
 module_param_named(ht_mode, ht_mode_param, charp, 0400);
 MODULE_PARM_DESC(ht_mode, "Force HT mode: wide or siso20");
-
-module_param_string(regdomain, regdomain, REGDOMAIN_LEN, 0400);
-MODULE_PARM_DESC(regdomain, "Regulatory domain/country code");
 
 MODULE_LICENSE("GPL v2");
 MODULE_AUTHOR("Luciano Coelho <coelho@ti.com>");
