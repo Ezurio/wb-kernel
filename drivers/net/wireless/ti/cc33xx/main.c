@@ -13,6 +13,7 @@
 #include <linux/irq.h>
 #include <linux/pm_wakeirq.h>
 #include "../net/mac80211/ieee80211_i.h"
+#include <linux/ctype.h>
 
 #include "acx.h"
 #include "boot.h"
