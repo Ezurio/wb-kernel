@@ -81,6 +81,7 @@ struct cc33xx_event_mailbox {
 	__le16 time_sync_tsf_low_lsb;
 
 	u8 ble_event[260];
+	u8 csi_data[136];
 	u8 reseed_request_size;
 	u8 reserved[3];
 
@@ -347,10 +348,6 @@ void process_deferred_events(struct cc33xx *wl)
 		struct cc33xx_event_mailbox *event_data;
 
 		event_data = &event_node->event_data;
-
-		if (unlikely(cc33xx_debug_level & DEBUG_EVENT))
-			print_hex_dump(KERN_DEBUG, "Deferred event dump:",
-				       DUMP_PREFIX_OFFSET, 4, 4, event_data, 64, false);
 
 		vector = le32_to_cpu(event_node->event_data.events_vector);
 		cc33xx_debug(DEBUG_EVENT, "MBOX vector: 0x%x", vector);
