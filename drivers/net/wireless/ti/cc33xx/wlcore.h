@@ -15,8 +15,8 @@
 /* Wireless Driver Version */
 #define MAJOR_VERSION 	1
 #define MINOR_VERSION 	7
-#define API_VERSION 	119
-#define BUILD_VERSION	213
+#define API_VERSION 	120
+#define BUILD_VERSION	220
 
 
 /* The maximum number of Tx descriptors in all chip families */
@@ -65,7 +65,7 @@ struct driver_fw_versions{
 
 struct cc33xx_stats {
 	void *fw_stats;
-	unsigned long fw_stats_update;
+	unsigned long fw_stats_next_update;
 	unsigned int retry_count;
 	unsigned int excessive_retries;
 };

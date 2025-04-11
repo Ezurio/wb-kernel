@@ -342,6 +342,7 @@ static int get_device_info_ram_loader(struct cc33xx *wl)
 	wl->efuse_mac_address[1] = (u8) (mac_address >> 32);
 	wl->efuse_mac_address[0] = (u8) (mac_address >> 40);
 
+	// wl->disable_wifi6 = hw_info.bitmap.disable_wifi6;
 
 	return 0;
 }
@@ -374,6 +375,10 @@ int cc33xx_init_fw(struct cc33xx *wl)
 	
 	ret = container_download_and_wait(wl, SECOND_LOADER_NAME, 
 					  HINT_SECOND_LOADER_INIT_COMPLETE);
+	if (ret < 0)
+		goto disable_irq;
+
+    ret = get_device_info_ram_loader(wl);
 	if (ret < 0)
 		goto disable_irq;
 
