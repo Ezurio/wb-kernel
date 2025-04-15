@@ -67,6 +67,7 @@ struct gpio_regulator_config {
 
 	unsigned enabled_at_boot:1;
 	unsigned startup_delay;
+	unsigned int off_on_delay;
 
 	enum gpiod_flags *gflags;
 	int ngpios;

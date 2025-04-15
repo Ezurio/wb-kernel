@@ -159,6 +159,7 @@ of_get_gpio_regulator_config(struct device *dev, struct device_node *np,
 		config->enabled_at_boot = true;
 
 	of_property_read_u32(np, "startup-delay-us", &config->startup_delay);
+	of_property_read_u32(np, "off-on-delay-us", &config->off_on_delay);
 
 	/* Fetch GPIO init levels */
 	ngpios = gpiod_count(dev, NULL);
@@ -301,6 +302,7 @@ static int gpio_regulator_probe(struct platform_device *pdev)
 
 	drvdata->desc.owner = THIS_MODULE;
 	drvdata->desc.enable_time = config->startup_delay;
+	drvdata->desc.off_on_delay = config->off_on_delay;
 
 	/* handle regulator type*/
 	switch (config->type) {
