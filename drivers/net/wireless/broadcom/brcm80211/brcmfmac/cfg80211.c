@@ -797,6 +797,7 @@ brcmf_add_iwie(struct brcmf_cfg80211_info *cfg, struct brcmf_if *ifp, s32 pktfla
 {
 	int err = 0;
 	u32 buf_len;
+	int str_num;
 	struct ie_set_buffer *ie_setbuf;
 
 	if (ie_id != WLAN_EID_INTERWORKING) {
@@ -827,7 +828,12 @@ brcmf_add_iwie(struct brcmf_cfg80211_info *cfg, struct brcmf_if *ifp, s32 pktfla
 	if (!ie_setbuf)
 		return -ENOMEM;
 
-	strscpy(ie_setbuf->cmd, "add", sizeof(ie_setbuf->cmd));
+	str_num = strscpy(ie_setbuf->cmd, "add", sizeof(ie_setbuf->cmd));
+	if (str_num <= 0) {
+		kfree(ie_setbuf);
+		brcmf_err("string length copy error %d\n", str_num);
+		return str_num;
+	}
 
 	/* Buffer contains only 1 IE */
 	ie_setbuf->ie_buffer.iecount = cpu_to_le32(1);
