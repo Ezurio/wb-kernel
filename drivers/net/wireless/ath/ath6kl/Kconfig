@@ -57,7 +57,6 @@ config ATH6KL_TRACING
 config ATH6KL_REGDOMAIN
 	bool "Atheros ath6kl regdomain support"
 	depends on ATH6KL
-	depends on CFG80211_CERTIFICATION_ONUS
 	help
 	  Enabling this makes it possible to change the regdomain in
 	  the firmware. This can be only enabled if regulatory requirements
