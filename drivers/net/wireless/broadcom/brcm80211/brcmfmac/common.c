@@ -43,6 +43,11 @@ static int brcmf_sdiod_txglomsz = BRCMF_DEFAULT_TXGLOM_SIZE;
 module_param_named(txglomsz, brcmf_sdiod_txglomsz, int, 0);
 MODULE_PARM_DESC(txglomsz, "Maximum tx packet chain size [SDIO]");
 
+static char brcmf_regdomain[BRCMF_REGDOMAIN_LEN];
+module_param_string(regdomain, brcmf_regdomain,
+		    BRCMF_REGDOMAIN_LEN, 0400);
+MODULE_PARM_DESC(regdomain, "Regulatory domain/country code");
+
 /* Debug level configuration. See debug.h for bits, sysfs modifiable */
 int brcmf_msg_level;
 module_param_named(debug, brcmf_msg_level, int, 0600);
@@ -85,11 +90,6 @@ MODULE_PARM_DESC(max_pm, "Use max power management mode by default");
 int brcmf_pkt_prio_enable;
 module_param_named(pkt_prio, brcmf_pkt_prio_enable, int, 0);
 MODULE_PARM_DESC(pkt_prio, "Support for update the packet priority");
-
-static char brcmf_regdomain[BRCMF_REGDOMAIN_LEN];
-module_param_string(regdomain, brcmf_regdomain,
-		    BRCMF_REGDOMAIN_LEN, 0400);
-MODULE_PARM_DESC(regdomain, "Regulatory domain/country code");
 
 #ifdef DEBUG
 /* always succeed brcmf_bus_started() */
@@ -778,6 +778,9 @@ struct brcmf_mp_device *brcmf_get_module_param(struct device *dev,
 	if (!settings)
 		return NULL;
 
+	// Copy regulory domain module parameter, subject to override by DT
+	strscpy(settings->regdomain, brcmf_regdomain, BRCMF_REGDOMAIN_LEN);
+
 	/* start by using the module parameters */
 	brcmf_dbg(INFO, "debug: 0x%x\n", brcmf_msg_level);
 	brcmf_dbg(INFO, "alternative_fw_path: %s\n", brcmf_firmware_path);
@@ -822,10 +825,6 @@ struct brcmf_mp_device *brcmf_get_module_param(struct device *dev,
 
 	settings->bt_over_sdio = !!brcmf_bt_over_sdio;
 	brcmf_dbg(INFO, "bt_over_sdio: %d\n", settings->bt_over_sdio);
-
-	// Summit - Copy regulory domain module parameter, subject to
-	// override by DT
-	strscpy(settings->regdomain, brcmf_regdomain, BRCMF_REGDOMAIN_LEN);
 
 	if (bus_type == BRCMF_BUSTYPE_SDIO) {
 		settings->bus.sdio.txglomsz = brcmf_sdiod_txglomsz;
