@@ -39,6 +39,11 @@ static int brcmf_sdiod_txglomsz = BRCMF_DEFAULT_TXGLOM_SIZE;
 module_param_named(txglomsz, brcmf_sdiod_txglomsz, int, 0);
 MODULE_PARM_DESC(txglomsz, "Maximum tx packet chain size [SDIO]");
 
+static char brcmf_regdomain[BRCMF_REGDOMAIN_LEN];
+module_param_string(regdomain, brcmf_regdomain,
+		    BRCMF_REGDOMAIN_LEN, 0400);
+MODULE_PARM_DESC(regdomain, "Regulatory domain/country code");
+
 /* Debug level configuration. See debug.h for bits, sysfs modifiable */
 int brcmf_msg_level;
 module_param_named(debug, brcmf_msg_level, int, 0600);
@@ -68,11 +73,6 @@ MODULE_PARM_DESC(roamoff, "Do not use internal roaming engine");
 static int brcmf_iapp_enable;
 module_param_named(iapp, brcmf_iapp_enable, int, 0);
 MODULE_PARM_DESC(iapp, "Enable partial support for the obsoleted Inter-Access Point Protocol");
-
-static char brcmf_regdomain[BRCMF_REGDOMAIN_LEN];
-module_param_string(regdomain, brcmf_regdomain,
-		    BRCMF_REGDOMAIN_LEN, 0400);
-MODULE_PARM_DESC(regdomain, "Regulatory domain/country code");
 
 #ifdef DEBUG
 /* always succeed brcmf_bus_started() */
@@ -502,6 +502,9 @@ struct brcmf_mp_device *brcmf_get_module_param(struct device *dev,
 	if (!settings)
 		return NULL;
 
+	// Copy regulory domain module parameter, subject to override by DT
+	strscpy(settings->regdomain, brcmf_regdomain, BRCMF_REGDOMAIN_LEN);
+
 	/* start by using the module parameters */
 	settings->p2p_enable = !!brcmf_p2p_enable;
 	settings->feature_disable = brcmf_feature_disable;
@@ -511,10 +514,6 @@ struct brcmf_mp_device *brcmf_get_module_param(struct device *dev,
 #ifdef DEBUG
 	settings->ignore_probe_fail = !!brcmf_ignore_probe_fail;
 #endif
-
-	// Summit - Copy regulory domain module parameter, subject to
-	// override by DT
-	strscpy(settings->regdomain, brcmf_regdomain, BRCMF_REGDOMAIN_LEN);
 
 	if (bus_type == BRCMF_BUSTYPE_SDIO)
 		settings->bus.sdio.txglomsz = brcmf_sdiod_txglomsz;
