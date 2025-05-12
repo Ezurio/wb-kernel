@@ -33,6 +33,7 @@ int btti_debugfs_if_prepare_command(u8 cmd_type,\
 
 #define DEBUGFS_FORMAT_BUFFER_SIZE 256
 
+static
 int btti_format_buffer(char __user *userbuf, size_t count,
 			 loff_t *ppos, char *fmt, ...)
 {
