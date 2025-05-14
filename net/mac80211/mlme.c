@@ -147,6 +147,26 @@ static int ecw2cw(int ecw)
 	return (1 << ecw) - 1;
 }
 
+static bool
+ieee80211_is_20mhzonly_he(struct ieee80211_sub_if_data *sdata,
+	struct ieee80211_supported_band *sband)
+{
+	const struct ieee80211_sta_he_cap * he_cap;
+
+	he_cap = ieee80211_get_he_iftype_cap_vif(sband, &sdata->vif);
+	if (!he_cap)
+		return false;
+
+	if (sband->band == NL80211_BAND_2GHZ) {
+		if (!(he_cap->he_cap_elem.phy_cap_info[0] & IEEE80211_HE_PHY_CAP0_CHANNEL_WIDTH_SET_40MHZ_IN_2G))
+			return true;
+	}
+	else if (!(he_cap->he_cap_elem.phy_cap_info[0] & IEEE80211_HE_PHY_CAP0_CHANNEL_WIDTH_SET_40MHZ_80MHZ_IN_5G))
+		return true;
+
+	return false;
+}
+
 static enum ieee80211_conn_mode
 ieee80211_determine_ap_chan(struct ieee80211_sub_if_data *sdata,
 			    struct ieee80211_channel *channel,
@@ -239,7 +259,9 @@ ieee80211_determine_ap_chan(struct ieee80211_sub_if_data *sdata,
 		return IEEE80211_CONN_MODE_LEGACY;
 	}
 
-	ieee80211_chandef_ht_oper(ht_oper, chandef);
+	/* Don't upgrade 20mhz only devices to wider channel */
+	if (!ieee80211_is_20mhzonly_he(sdata, sband))
+		ieee80211_chandef_ht_oper(ht_oper, chandef);
 
 	if (conn->mode < IEEE80211_CONN_MODE_VHT)
 		return IEEE80211_CONN_MODE_HT;
@@ -293,7 +315,9 @@ ieee80211_determine_ap_chan(struct ieee80211_sub_if_data *sdata,
 		return IEEE80211_CONN_MODE_HT;
 	}
 
-	*chandef = vht_chandef;
+	/* Do not use wider vht chandef if this is a 20mhz only HE sta */
+	if (!ieee80211_is_20mhzonly_he(sdata, sband))
+		*chandef = vht_chandef;
 
 	/* stick to current max mode if we or the AP don't have HE */
 	if (conn->mode < IEEE80211_CONN_MODE_HE ||
@@ -5191,6 +5215,7 @@ ieee80211_determine_our_sta_mode(struct ieee80211_sub_if_data *sdata,
 	struct ieee80211_sta_ht_cap sta_ht_cap = sband->ht_cap;
 	bool is_5ghz = sband->band == NL80211_BAND_5GHZ;
 	bool is_6ghz = sband->band == NL80211_BAND_6GHZ;
+	bool is_20mhzonly_he;
 	const struct ieee80211_sta_he_cap *he_cap;
 	const struct ieee80211_sta_eht_cap *eht_cap;
 	struct ieee80211_sta_vht_cap vht_cap;
@@ -5254,7 +5279,8 @@ ieee80211_determine_our_sta_mode(struct ieee80211_sub_if_data *sdata,
 		goto out;
 	}
 
-	if (vht_cap.vht_supported && is_5ghz) {
+	is_20mhzonly_he = ieee80211_is_20mhzonly_he(sdata, sband);
+	if (vht_cap.vht_supported && is_5ghz && !is_20mhzonly_he) {
 		bool have_80mhz = false;
 		unsigned int i;
 
@@ -5279,7 +5305,7 @@ ieee80211_determine_our_sta_mode(struct ieee80211_sub_if_data *sdata,
 					 "no 80 MHz channel support on 5 GHz, limiting to HT\n");
 			goto out;
 		}
-	} else if (is_5ghz) { /* !vht_supported but on 5 GHz */
+	} else if (is_5ghz && !vht_cap.vht_supported) { /* !vht_supported but on 5 GHz */
 		mlme_link_id_dbg(sdata, link_id,
 				 "no VHT support on 5 GHz, limiting to HT\n");
 		goto out;
@@ -5288,10 +5314,11 @@ ieee80211_determine_our_sta_mode(struct ieee80211_sub_if_data *sdata,
 	/* VHT - if we have - is fine, including 80 MHz, check 160 below again */
 	if (sband->band != NL80211_BAND_2GHZ) {
 		conn->mode = IEEE80211_CONN_MODE_VHT;
-		conn->bw_limit = IEEE80211_CONN_BW_LIMIT_160;
+		if (!is_20mhzonly_he)
+			conn->bw_limit = IEEE80211_CONN_BW_LIMIT_160;
 	}
 
-	if (is_5ghz &&
+	if (is_5ghz && !is_20mhzonly_he &&
 	    !(vht_cap.cap & (IEEE80211_VHT_CAP_SUPP_CHAN_WIDTH_160MHZ |
 			     IEEE80211_VHT_CAP_SUPP_CHAN_WIDTH_160_80PLUS80MHZ))) {
 		conn->bw_limit = IEEE80211_CONN_BW_LIMIT_80;
