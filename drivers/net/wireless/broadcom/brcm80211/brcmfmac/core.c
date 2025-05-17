@@ -2175,7 +2175,7 @@ brcmf_find_sta(struct brcmf_if *ifp, const u8 *ea)
 }
 
 /** Add STA into the interface's STA list. */
-struct brcmf_sta *
+static struct brcmf_sta *
 brcmf_add_sta(struct brcmf_if *ifp, const u8 *ea)
 {
 	struct brcmf_sta *sta;

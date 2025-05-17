@@ -1601,6 +1601,7 @@ struct brcmf_core *brcmf_chip_get_pmu(struct brcmf_chip *pub)
 	return cc;
 }
 
+static
 struct brcmf_core *brcmf_chip_get_gci(struct brcmf_chip *pub)
 {
 	struct brcmf_core *gci;

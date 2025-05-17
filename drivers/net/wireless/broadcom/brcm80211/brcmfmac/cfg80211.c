@@ -7280,6 +7280,7 @@ brcmf_cfg80211_set_cqm_rssi_config(struct wiphy *wiphy, struct net_device *dev,
 	return err;
 }
 
+static
 int brcmf_cfg80211_update_owe_info(struct wiphy *wiphy, struct net_device *dev,
 				   struct cfg80211_update_owe_info *owe_info)
 {
@@ -8918,7 +8919,7 @@ static void brcmf_update_bw40_channel_flag(struct ieee80211_channel *channel,
 }
 
 #define BRCMF_C_SET_BAND			142
-void lrd_setband(struct brcmf_if *ifp, int band)
+static void lrd_setband(struct brcmf_if *ifp, int band)
 {
 	s32 val;
 
