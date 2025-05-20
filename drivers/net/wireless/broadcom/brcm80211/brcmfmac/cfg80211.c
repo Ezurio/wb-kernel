@@ -10240,22 +10240,6 @@ int brcmf_cfg80211_wait_vif_event(struct brcmf_cfg80211_info *cfg,
 				  vif_event_equals(event, action), timeout);
 }
 
-static bool brmcf_use_iso3166_ccode_fallback(struct brcmf_pub *drvr)
-{
-	if (drvr->settings->trivial_ccode_map)
-		return true;
-
-	switch (drvr->bus_if->chip) {
-	case BRCM_CC_43430_CHIP_ID:
-	case BRCM_CC_4345_CHIP_ID:
-	case BRCM_CC_4356_CHIP_ID:
-	case BRCM_CC_43602_CHIP_ID:
-		return true;
-	default:
-		return false;
-	}
-}
-
 static s32 brcmf_translate_country_code(struct brcmf_pub *drvr, char alpha2[2],
 					struct brcmf_fil_country_le *ccreq)
 {
@@ -10272,16 +10256,6 @@ static s32 brcmf_translate_country_code(struct brcmf_pub *drvr, char alpha2[2],
 
 	country_codes = drvr->settings->country_codes;
 	if (!country_codes) {
-		if (brmcf_use_iso3166_ccode_fallback(drvr)) {
-			brcmf_dbg(TRACE, "No country codes configured for device, using ISO3166 code and 0 rev\n");
-			memset(ccreq, 0, sizeof(*ccreq));
-			ccreq->country_abbrev[0] = alpha2[0];
-			ccreq->country_abbrev[1] = alpha2[1];
-			ccreq->ccode[0] = alpha2[0];
-			ccreq->ccode[1] = alpha2[1];
-			return 0;
-		}
-
 		brcmf_dbg(TRACE, "No country codes configured for device\n");
 		return -EINVAL;
 	}
