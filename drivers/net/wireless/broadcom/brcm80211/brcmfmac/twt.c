@@ -894,7 +894,7 @@ exit:
  *
  * return: 0 on success, value < 0 on failure.
  */
-s32
+static s32
 brcmf_twt_setup_oper_handler(struct brcmf_if *ifp, struct brcmf_twt_params twt_params)
 {
 	struct brcmf_cfg80211_vif *vif = ifp->vif;
@@ -1047,7 +1047,7 @@ exit:
  *
  * return: 0 on success, value < 0 on failure.
  */
-s32
+static s32
 brcmf_twt_teardown_oper_handler(struct brcmf_if *ifp, struct brcmf_twt_params twt_params)
 {
 	struct brcmf_twt_teardown_oper val;
