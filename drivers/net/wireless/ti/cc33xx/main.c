@@ -5591,20 +5591,20 @@ static int cc33xx_init_ieee80211(struct cc33xx *wl)
 		cc33xx_band_5ghz.channels[i].max_antenna_gain = 0;
 	}
 
-	/* Enable/Disable He based on conf file params */
-	if(!wl->conf.mac.he_enable)
-		{
+	/* Enable/Disable He based on eFuse/conf file params */
+    if((!wl->disable_wifi6) && (wl->conf.mac.he_enable))
+	{
+		wl->hw->wiphy->iftype_ext_capab = he_iftypes_ext_capa;
+		wl->hw->wiphy->num_iftype_ext_capab =
+			ARRAY_SIZE(he_iftypes_ext_capa);
+	}
+	else
+	{
 		cc33xx_band_2ghz.iftype_data = NULL;
 		cc33xx_band_2ghz.n_iftype_data = 0;
 
 		cc33xx_band_5ghz.iftype_data = NULL;
 		cc33xx_band_5ghz.n_iftype_data = 0;
-	}
-	else
-	{
-		wl->hw->wiphy->iftype_ext_capab = he_iftypes_ext_capa;
-		wl->hw->wiphy->num_iftype_ext_capab =
-			ARRAY_SIZE(he_iftypes_ext_capa);
 	}
 
 	/*

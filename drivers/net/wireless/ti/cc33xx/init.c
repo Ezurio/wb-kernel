@@ -11,7 +11,7 @@
 #include "acx.h"
 #include "cc33xx_80211.h"
 #include "cmd.h"
-#include "conf.h"
+#include "conf_cc33xx.h"
 #include "event.h"
 #include "tx.h"
 #include "init.h"

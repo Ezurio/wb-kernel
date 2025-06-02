@@ -15,8 +15,8 @@
 /* Wireless Driver Version */
 #define MAJOR_VERSION 	1
 #define MINOR_VERSION 	7
-#define API_VERSION 	120
-#define BUILD_VERSION	220
+#define API_VERSION 	0
+#define BUILD_VERSION	232
 
 
 /* The maximum number of Tx descriptors in all chip families */
@@ -324,6 +324,8 @@ struct cc33xx {
 
 	/* burst mode cfg */
 	u8 burst_disable;
+
+    u8	disable_wifi6;
 };
 
 /* Quirks */

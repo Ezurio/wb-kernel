@@ -12,7 +12,7 @@
 #include "cmd.h"
 #include "scan.h"
 #include "tx.h"
-#include "conf.h"
+#include "conf_cc33xx.h"
 
 
 static void cc33xx_adjust_channels(struct scan_param *scanParam,

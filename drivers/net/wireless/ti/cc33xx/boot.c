@@ -38,6 +38,7 @@ struct hwinfo_bitmap
     u32 fw_rollback_protection_1    : 32u;
     u32 fw_rollback_protection_2    : 32u;
     u32 fw_rollback_protection_3    : 32u;
+    u32 disable_wifi6               : 1u;
     u32 reserved                    : 13u;
 } /* Aligned with boot code, must not be __packed */;
 
@@ -343,7 +344,7 @@ static int get_device_info_ram_loader(struct cc33xx *wl)
 	wl->efuse_mac_address[1] = (u8) (mac_address >> 32);
 	wl->efuse_mac_address[0] = (u8) (mac_address >> 40);
 
-	// wl->disable_wifi6 = hw_info.bitmap.disable_wifi6;
+	wl->disable_wifi6 = hw_info.bitmap.disable_wifi6;
 
 	return 0;
 }

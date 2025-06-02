@@ -35,8 +35,8 @@ struct cc33xx_cmd_dfs_radar_debug {
 
 /* ms */
 #define CC33XX_DEBUGFS_STATS_LIFETIME 1000
-#define MAX_VERSIONS_LEN	59
-#define MAX_VERSIONS_EXTENDED_LEN	88
+#define MAX_VERSIONS_LEN	128
+#define MAX_VERSIONS_EXTENDED_LEN	256
 
 static
 int cc33xx_cmd_radar_detection_debug(struct cc33xx *wl, u8 channel)
@@ -85,10 +85,6 @@ static ssize_t conf_read(struct file *file, char __user *user_buf,
 	header.fw_minor_version = cpu_to_le32(CC33XX_CONF_FW_MINOR_VERSION);
 	header.fw_api_version = cpu_to_le32(CC33XX_CONF_FW_API_VERSION);
 	header.fw_build_version = cpu_to_le32(CC33XX_CONF_FW_BUILD_VERSION);
-	header.sp_major_version = cpu_to_le32(CC33XX_CONF_SP_MAJOR_VERSION);
-	header.sp_minor_version = cpu_to_le32(CC33XX_CONF_SP_MINOR_VERSION);
-	header.sp_revision_version = cpu_to_le32(CC33XX_CONF_SP_REVISION_VERSION);
-	header.sp_build_version = cpu_to_le32(CC33XX_CONF_SP_BUILD_VERSION);
 
 	header.checksum	= 0;
 
@@ -1514,7 +1510,7 @@ static ssize_t get_versions_extended_read(struct file *file,
 	char all_versions_str [MAX_VERSIONS_EXTENDED_LEN];
 
 	sprintf(all_versions_str, "Driver Version: %u.%u.%u.%u\n"
-		"Firmware Version: %u.%u.%u.%u\nPhy Version: %u.%u.%u.%u.%u.%u.%u.%u", 
+		"Firmware Version: %u.%u.%u.%u\nPhy Version: %u.%u.%u.%u.%u.%u.%u.%u\n%s Container", 
 		driver_ver->major_version, driver_ver->minor_version,
 		driver_ver->api_version, driver_ver->build_version,
 		fw_ver->major_version, fw_ver->minor_version,
@@ -1522,7 +1518,8 @@ static ssize_t get_versions_extended_read(struct file *file,
 		fw_ver->phy_version[7], fw_ver->phy_version[6],	
 		fw_ver->phy_version[5], fw_ver->phy_version[4],	
 		fw_ver->phy_version[3], fw_ver->phy_version[2],
-		fw_ver->phy_version[1], fw_ver->phy_version[0]);
+		fw_ver->phy_version[1], fw_ver->phy_version[0], 
+        fw_ver->container_type == 3 ? "Programming" : "Operational");
 
 	return cc33xx_format_buffer(user_buf, count, ppos, "%s\n",
 				    all_versions_str);
@@ -1544,7 +1541,7 @@ static ssize_t get_versions_read(struct file *file, char __user *user_buf,
 	char all_versions_str [MAX_VERSIONS_LEN];
 
 	sprintf(all_versions_str,
-		"Driver Version: %u.%u.%u\nFirmware Version: %u.%u.%u", 
+		"Driver Version: %u.%u.%u\nFirmware Version: %u.%u.%u\n", 
 		driver_ver->major_version, driver_ver->minor_version,
 		driver_ver->api_version, fw_ver->major_version,
 		fw_ver->minor_version, fw_ver->api_version);
