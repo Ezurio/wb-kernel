@@ -14,7 +14,7 @@
 #include <net/mac80211.h>
 #include <linux/platform_device.h>
 
-#include "conf.h"
+#include "conf_cc33xx.h"
 
 
 struct cc33xx_family_data {

@@ -358,7 +358,8 @@ struct cc33xx_acx_fw_versions {
 	__le16 build_version;
 
 	u8 phy_version[8];
-	//u8 padding[0];
+    u8 container_type;
+    u8 padding[3];
 } __packed;
 
 /* TODO: maybe this needs to be moved somewhere else? */
@@ -615,6 +616,7 @@ typedef enum {
 	GET_ROLE_CHANNEL_NUMBER = 12,
 	GET_STATISTICS = 13,
 	GET_SP_VERSIONS_INTR = 14,
+	GET_LINK_INACTIVITY = 15,
 	LAST_IE_VALUE,
 	MAX_DOT11_IE = LAST_IE_VALUE,
 
