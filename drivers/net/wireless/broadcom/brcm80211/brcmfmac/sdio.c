@@ -5922,6 +5922,7 @@ fail:
 /* Detach and free everything */
 void brcmf_sdio_remove(struct brcmf_sdio *bus)
 {
+	bool bSkipReset = false;
 	struct brcmf_bus *bus_if = bus->sdiodev->bus_if;
 	u32 reg_val, read_reg;
 	int err = 0;
@@ -6073,8 +6074,12 @@ void brcmf_sdio_remove(struct brcmf_sdio *bus)
 			}
 			brcmf_chip_detach(bus->ci);
 		}
-		if (bus->sdiodev->settings)
+		if (bus->sdiodev->settings) {
+			if (!strlen(bus->sdiodev->settings->regdomain))
+				bSkipReset = true;
 			brcmf_release_module_param(bus->sdiodev->settings);
+		}
+
 #if defined(CONFIG_BRCMFMAC_BT_SHARED_SDIO) || defined(CONFIG_INFFMAC_BT_SHARED_SDIO)
 		brcmf_btsdio_detach(bus_if);
 #endif /* CONFIG_BRCMFMAC_BT_SHARED_SDIO */
@@ -6083,9 +6088,11 @@ void brcmf_sdio_remove(struct brcmf_sdio *bus)
 		bus->sdiodev->clm_fw = NULL;
 		inf_btsdio_deinit(bus_if);
 #if IS_BUILTIN(CONFIG_MMC)
-		sdio_claim_host(bus->sdiodev->func1);
-		mmc_hw_reset(bus->sdiodev->func1->card);
-		sdio_release_host(bus->sdiodev->func1);
+		if (!bSkipReset) {
+			sdio_claim_host(bus->sdiodev->func1);
+			mmc_hw_reset(bus->sdiodev->func1->card);
+			sdio_release_host(bus->sdiodev->func1);
+		}
 #endif
 		kfree(bus->rxbuf);
 		kfree(bus->hdrbuf);
