@@ -16,7 +16,7 @@
 #define MAJOR_VERSION 	1
 #define MINOR_VERSION 	7
 #define API_VERSION 	0
-#define BUILD_VERSION	232
+#define BUILD_VERSION	233
 
 
 /* The maximum number of Tx descriptors in all chip families */
