@@ -5927,7 +5927,8 @@ static int cc33xx_init_regdb(struct cc33xx *wl)
 		alpha2[0] = pCountryCode[1];
 		alpha2[1] = pCountryCode[0];
 
-		if (!isalpha(alpha2[0]) || !isalpha(alpha2[1])) {
+		if (!(isalpha(alpha2[0]) && isalpha(alpha2[1])) &&
+		    !(memcmp(alpha2, "00", 2) == 0)) {
 			cc33xx_error("Invalid country code: %c%c",
 				     alpha2[0], alpha2[1]);
 			alpha2[0] = '0';
