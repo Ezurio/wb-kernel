@@ -543,13 +543,6 @@ int brcmf_c_preinit_dcmds(struct brcmf_if *ifp)
 		goto done;
 	}
 
-	/* Do TxCap downloading, if needed */
-	err = brcmf_c_process_txcap_blob(ifp);
-	if (err < 0) {
-		bphy_err(drvr, "download TxCap blob file failed, %d\n", err);
-		goto done;
-	}
-
 	/* Download external calibration blob, if available */
 	err = brcmf_c_process_cal_blob(ifp);
 	if (err < 0) {
