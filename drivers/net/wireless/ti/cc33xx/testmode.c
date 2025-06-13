@@ -90,18 +90,6 @@ static int cc33xx_tm_cmd_test(struct cc33xx *wl, struct nlattr *tb[])
 	}
 
 	if (answer) {
-		/* If we got bip calibration answer print radio status */
-		struct cc33xx_cmd_cal_p2g *params =
-			(struct cc33xx_cmd_cal_p2g *) buf;
-		s16 radio_status = (s16) le16_to_cpu(params->radio_status);
-
-		if (params->test.id == TEST_CMD_P2G_CAL && radio_status < 0)
-			cc33xx_warning("testmode cmd: radio status=%d",
-				       radio_status);
-		else
-			cc33xx_info("testmode cmd: radio status=%d",
-					radio_status);
-
 		len = nla_total_size(buf_len);
 		skb = cfg80211_testmode_alloc_reply_skb(wl->hw->wiphy, len);
 		if (!skb) {
