@@ -392,29 +392,6 @@ static int brcmf_c_process_clm_blob(struct brcmf_if *ifp)
 	return err;
 }
 
-static int brcmf_c_process_txcap_blob(struct brcmf_if *ifp)
-{
-	struct brcmf_pub *drvr = ifp->drvr;
-	struct brcmf_bus *bus = drvr->bus_if;
-	const struct firmware *fw = NULL;
-	s32 err;
-
-	brcmf_dbg(TRACE, "Enter\n");
-
-	err = brcmf_bus_get_blob(bus, &fw, BRCMF_BLOB_TXCAP);
-	if (err || !fw) {
-		brcmf_info("no txcap_blob available (err=%d)\n", err);
-		return 0;
-	}
-
-	brcmf_info("TxCap blob found, loading\n");
-	err = brcmf_c_download_blob(ifp, fw->data, fw->size,
-				    "txcapload", "txcapload_status");
-
-	release_firmware(fw);
-	return err;
-}
-
 int brcmf_c_set_cur_etheraddr(struct brcmf_if *ifp, const u8 *addr)
 {
 	s32 err;
