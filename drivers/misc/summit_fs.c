@@ -75,6 +75,21 @@ static int fs_insertkey(struct fscrypt_key *fscrypt_key)
 
 	key_ref_put(key_ref);
 
+	/* create or update the logon key and add it to the target
+	* keyring for use with dm-crypt */
+	key_ref = key_create_or_update(make_key_ref(builtin_fs_keys, 1),
+						"logon",
+						"dm-crypt:ffffffffffffffff",
+						fscrypt_key->raw,
+						fscrypt_key->size,
+						KEY_POS_SEARCH | KEY_USR_SEARCH |
+						KEY_POS_LINK | KEY_USR_LINK,
+						KEY_ALLOC_IN_QUOTA);
+	if (IS_ERR(key_ref))
+		return PTR_ERR(key_ref);
+
+	key_ref_put(key_ref);
+
 	return 0;
 }
 
