@@ -1780,6 +1780,7 @@ static int brcmf_pcie_get_resource(struct brcmf_pciedev_info *devinfo)
 	int err;
 	phys_addr_t  bar0_addr, bar1_addr;
 	ulong bar1_size;
+	struct device *dev = &pdev->dev;
 
 	err = pci_enable_device(pdev);
 	if (err) {
@@ -1788,6 +1789,13 @@ static int brcmf_pcie_get_resource(struct brcmf_pciedev_info *devinfo)
 	}
 
 	pci_set_master(pdev);
+
+	brcmf_dbg(PCIE, "Setting DMA mask\n");
+	err = dma_set_mask_and_coherent(dev, DMA_BIT_MASK(64));
+	if (err) {
+		brcmf_err(bus, " dma_set_mask_and_coherent failed (%d)\n", err);
+		return err;
+	}
 
 	/* Bar-0 mapped address */
 	bar0_addr = pci_resource_start(pdev, 0);
