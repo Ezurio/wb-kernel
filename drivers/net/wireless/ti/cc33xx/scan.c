@@ -241,6 +241,7 @@ static int wlcore_scan_get_channels(struct cc33xx *wl,
 			flags |= IEEE80211_CHAN_NO_IR;
 
 		if ((req_ch->band == band) && !(flags & IEEE80211_CHAN_DISABLED)
+		    && !(flags & (IEEE80211_CHAN_NO_20MHZ | IEEE80211_CHAN_NO_10MHZ))
 		    && (!!(flags & IEEE80211_CHAN_RADAR) == radar) &&
 		    /* if radar is set, we ignore the passive flag */
 		    (radar || !!(flags & IEEE80211_CHAN_NO_IR) == passive)) {
