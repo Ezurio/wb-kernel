@@ -287,12 +287,12 @@ static struct ieee80211_channel cc33xx_channels_2ghz[] = {
 	{ .hw_value = 5, .center_freq = 2432, .max_power = CC33XX_MAX_TXPWR },
 	{ .hw_value = 7, .center_freq = 2442, .max_power = CC33XX_MAX_TXPWR },
 	{ .hw_value = 9, .center_freq = 2452, .max_power = CC33XX_MAX_TXPWR },
-	{ .hw_value = 13, .center_freq = 2472, .max_power = CC33XX_MAX_TXPWR },
 	{ .hw_value = 2, .center_freq = 2417, .max_power = CC33XX_MAX_TXPWR },
 	{ .hw_value = 4, .center_freq = 2427, .max_power = CC33XX_MAX_TXPWR },
 	{ .hw_value = 8, .center_freq = 2447, .max_power = CC33XX_MAX_TXPWR },
 	{ .hw_value = 10, .center_freq = 2457, .max_power = CC33XX_MAX_TXPWR },
-	{ .hw_value = 12, .center_freq = 2467, .max_power = CC33XX_MAX_TXPWR },
+	{ .hw_value = 12, .center_freq = 2467, .max_power = CC33XX_MAX_TXPWR }, // Must be last
+	{ .hw_value = 13, .center_freq = 2472, .max_power = CC33XX_MAX_TXPWR }, // Must be last
 };
 
 static struct ieee80211_sband_iftype_data iftype_data_2ghz[] = {{
@@ -5496,6 +5496,21 @@ static void cc33xx_unregister_hw(struct cc33xx *wl)
 	wl->mac80211_registered = false;
 }
 
+static int cc33xx_is_ww(struct cc33xx *wl)
+{
+	/* Check if the country code is set to 0x00 */
+	if (wl->conf.core.country_code == 0x00) {
+		return 1;
+	}
+
+	/* Check if the country code is set to '00' */
+	if (wl->conf.core.country_code == cpu_to_le32(0x00003030)) {
+		return 1;
+	}
+
+	return 0;
+}
+
 static int cc33xx_init_ieee80211(struct cc33xx *wl)
 {
 	int i;
@@ -5584,6 +5599,9 @@ static int cc33xx_init_ieee80211(struct cc33xx *wl)
 		cc33xx_band_2ghz.channels[i].max_power = CC33XX_MAX_TXPWR;
 		cc33xx_band_2ghz.channels[i].max_antenna_gain = 0;
 	}
+
+	if (cc33xx_is_ww(wl))
+		cc33xx_band_2ghz.n_channels = ARRAY_SIZE(cc33xx_channels_2ghz) - 2;
 
 	for (i = 0; i < ARRAY_SIZE(cc33xx_channels_5ghz); i++) {
 		cc33xx_band_5ghz.channels[i].flags = 0;
