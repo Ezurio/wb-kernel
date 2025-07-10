@@ -5660,7 +5660,7 @@ static int cc33xx_init_ieee80211(struct cc33xx *wl)
 
 	wl->hw->wiphy->reg_notifier = cc33xx_reg_notify;
 
-	wl->hw->wiphy->regulatory_flags |= REGULATORY_STRICT_REG;
+	wl->hw->wiphy->regulatory_flags |= REGULATORY_STRICT_REG | REGULATORY_COUNTRY_IE_IGNORE;
 
 	/* allowed interface combinations */
 	wl->hw->wiphy->iface_combinations = cc33xx_iface_combinations;
