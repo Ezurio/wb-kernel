@@ -2513,7 +2513,7 @@ brcmf_pcie_buscore_sec_attach(void *ctx, struct brcmf_blhs **blhs, struct brcmf_
 			      u32 flag, uint timeout, uint interval)
 {
 	struct brcmf_pciedev_info *devinfo = (struct brcmf_pciedev_info *)ctx;
-	struct brcmf_bus *bus = dev_get_drvdata(&devinfo->pdev->dev);
+	//struct brcmf_bus *bus = dev_get_drvdata(&devinfo->pdev->dev);
 	struct brcmf_blhs *blhsh;
 	u32 regdata;
 	u32 pcie_enum;
@@ -2544,16 +2544,24 @@ brcmf_pcie_buscore_sec_attach(void *ctx, struct brcmf_blhs **blhs, struct brcmf_
 		addr = regdata + pcie_enum + blhsh->h2d;
 		brcmf_pcie_buscore_write32(ctx, addr, 0);
 
+		/* Some platforms do not return valid results or crash when reading
+		 * blhsh->d2h through this interface. This should never fail; wait 
+		 * for the timeout and just continue.
+		 */
+#if 0
 		addr = regdata + pcie_enum + blhsh->d2h;
 		SPINWAIT_MS((brcmf_pcie_buscore_read32(ctx, addr) & flag) == 0,
-			    timeout, interval);
+		    timeout, interval);
 		regdata = brcmf_pcie_buscore_read32(ctx, addr);
 		if (!(regdata & flag)) {
 			brcmf_err(bus, "Timeout waiting for bootloader ready\n");
 			kfree(blhsh);
 			return -EPERM;
 		}
+#else
+		msleep(timeout);
 		*blhs = blhsh;
+#endif
 	}
 
 	return 0;
