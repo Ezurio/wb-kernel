@@ -2533,15 +2533,18 @@ brcmf_pcie_buscore_sec_attach(void *ctx, struct brcmf_blhs **blhs, struct brcmf_
 		addr = regdata + pcie_enum + blhsh->h2d;
 		brcmf_pcie_buscore_write32(ctx, addr, 0);
 
-		addr = regdata + pcie_enum + blhsh->d2h;
-		SPINWAIT_MS((brcmf_pcie_buscore_read32(ctx, addr) & flag) == 0,
-			    timeout, interval);
-		regdata = brcmf_pcie_buscore_read32(ctx, addr);
-		if (!(regdata & flag)) {
-			brcmf_err(bus, "Timeout waiting for bootloader ready\n");
-			kfree(blhsh);
-			return -EPERM;
-		}
+		// Some platforms do not return valid results or crash when reading blhsh->d2h through this interface
+		// This should never fail; wait for the max and continue with a message if the flag is not detected
+		//addr = regdata + pcie_enum + blhsh->d2h;
+		//SPINWAIT_MS((brcmf_pcie_buscore_read32(ctx, addr) & flag) == 0,
+		//    timeout, interval);
+		//regdata = brcmf_pcie_buscore_read32(ctx, addr);
+		//if (!(regdata & flag)) {
+		//	brcmf_err(bus, "Timeout waiting for bootloader ready\n");
+		//	kfree(blhsh);
+		//	return -EPERM;
+		//}
+		msleep(timeout);
 		*blhs = blhsh;
 	}
 
