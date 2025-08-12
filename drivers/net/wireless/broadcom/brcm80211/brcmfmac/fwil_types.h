@@ -1298,6 +1298,36 @@ struct brcmf_ol_cfg_v1 {
 	u32 offload_skip;				/* Bitmap of offload to be skipped */
 };
 
+#define WL_MAX_ROAM_PROF_BRACKETS	4
+#define WL_ROAM_PROF_VER_2	2
+
+struct wl_roam_prof_v3 {
+	u8	roam_flags;
+	s8	roam_trigger;
+	s8	rssi_lower;
+	s8	roam_delta;
+
+	s8	rssi_boost_thresh;
+	s8	rssi_boost_delta;
+	u16	nfscan;
+	u16	fullscan_period;
+	u16	init_scan_period;
+	u16	backoff_multiplier;
+	u16	max_scan_period;
+	u8	channel_usage;
+	u8	cu_avg_calc_dur;
+	u16	estm_low_trigger;
+	s8	estm_roam_delta;
+	u8 pad;
+};
+
+struct wl_roam_prof_band_v3 {
+	u32	band;
+	u16	ver;
+	u16	len;
+	struct wl_roam_prof_v3 roam_prof[WL_MAX_ROAM_PROF_BRACKETS];
+};
+
 #define WL_ICMP_ECHO_REQ_VER		1
 
 #define ICMP_ECHO_REQ_IP_BOTH		0

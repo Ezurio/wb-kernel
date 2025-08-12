@@ -8718,6 +8718,39 @@ static void init_vif_event(struct brcmf_cfg80211_vif_event *event)
 	spin_lock_init(&event->vif_event_lock);
 }
 
+static int brcmf_roam_prof_default(struct brcmf_if *ifp, u32 band)
+{
+	struct wl_roam_prof_band_v3 rp;
+	s32 err;
+
+	memset(&rp, 0, sizeof(rp));
+
+	rp.band = cpu_to_le32(band);
+	rp.ver = cpu_to_le16(WL_ROAM_PROF_VER_2);
+	rp.len = cpu_to_le16(sizeof(struct wl_roam_prof_v3));
+
+	rp.roam_prof[0].roam_flags = 0;
+	rp.roam_prof[0].roam_trigger = WL_ROAM_TRIGGER_LEVEL;
+	rp.roam_prof[0].rssi_lower = -128;
+	rp.roam_prof[0].roam_delta = WL_ROAM_DELTA;
+	rp.roam_prof[0].rssi_boost_thresh = -65;
+	rp.roam_prof[0].rssi_boost_delta = 0;
+	rp.roam_prof[0].nfscan = cpu_to_le16(3);
+	rp.roam_prof[0].fullscan_period = cpu_to_le16(70);
+	rp.roam_prof[0].init_scan_period = cpu_to_le16(10);
+	rp.roam_prof[0].backoff_multiplier = cpu_to_le16(1);
+	rp.roam_prof[0].max_scan_period = cpu_to_le16(10);
+	rp.roam_prof[0].channel_usage = 0;
+	rp.roam_prof[0].cu_avg_calc_dur = 10;
+	rp.roam_prof[0].estm_low_trigger = 0;
+	rp.roam_prof[0].estm_roam_delta = 10;
+
+
+	err = brcmf_fil_iovar_data_set(ifp, "roam_prof", &rp, sizeof(rp));
+
+	return err;
+}
+
 static s32 brcmf_dongle_roam(struct brcmf_if *ifp)
 {
 	struct brcmf_pub *drvr = ifp->drvr;
@@ -8786,6 +8819,24 @@ static s32 brcmf_dongle_roam(struct brcmf_if *ifp)
 		if (err)
 			bphy_err(drvr, "WLC_SET_ROAM_DELTA error (%d), band %d\n",
 				 err, bandlist[i]);
+	}
+
+	switch (drvr->bus_if->chip) {
+	case CY_CC_55572_CHIP_ID:
+	case CY_CC_55500_CHIP_ID:
+		err = brcmf_roam_prof_default(ifp, BRCM_BAND_2G);
+		if (err) {
+			bphy_err(drvr, "Roam profile default error (%d)\n", err);
+			goto roam_setup_done;
+		}
+		err = brcmf_roam_prof_default(ifp, BRCM_BAND_5G);
+		if (err) {
+			bphy_err(drvr, "Roam profile default error (%d)\n", err);
+			goto roam_setup_done;
+		}
+		break;
+	default:
+		break;
 	}
 
 	return 0;
