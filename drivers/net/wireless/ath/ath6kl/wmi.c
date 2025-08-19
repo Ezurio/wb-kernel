@@ -102,6 +102,7 @@ static struct country_code_to_enum_rd summitCountries[] = {
 	{0x800 + 600, NO_ENUMRD, "PY"},
 	//Both
 	{0x800 + 104, NO_ENUMRD, "MM"},
+	{0x000      , WORA_WORLD, "00"}
 };
 
 void ath6kl_wmi_set_control_ep(struct wmi *wmi, enum htc_endpoint_id ep_id)
@@ -1063,7 +1064,10 @@ static void ath6kl_wmi_regdomain_event(struct wmi *wmi, u8 *datap, int len)
 
 	if ((reg_code >> ATH6KL_COUNTRY_RD_SHIFT) & COUNTRY_ERD_FLAG) {
 		country = ath6kl_regd_find_country((u16) reg_code);
-	} else if (!(((u16) reg_code & WORLD_SKU_MASK) == WORLD_SKU_PREFIX)) {
+	}
+	else if ((((u16) reg_code & WORLD_SKU_MASK) == WORLD_SKU_PREFIX)) {
+		country = ath6kl_regd_find_country_by_rd((u16) reg_code);
+	} else {
 		regpair = ath6kl_get_regpair((u16) reg_code);
 		country = ath6kl_regd_find_country_by_rd((u16) reg_code);
 		if (regpair)
@@ -4262,7 +4266,7 @@ int ath6kl_wmi_channel_params_cmd(struct wmi *wmi, u8 if_idx, u8 scan_param,
 	struct wmi_channel_params_cmd *cmd;
 	int ret;
 
-	skb = ath6kl_wmi_get_new_buf(sizeof(*cmd) + ((num_channels-1)*sizeof(u16)));
+	skb = ath6kl_wmi_get_new_buf(sizeof(*cmd) + ((num_channels)*sizeof(u16)));
 	if (!skb)
 		return -ENOMEM;
 

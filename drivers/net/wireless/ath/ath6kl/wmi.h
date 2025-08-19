@@ -1232,7 +1232,7 @@ struct wmi_channel_params_cmd {
     u8     scan_param;              /* set if enable scan */
     u8     phy_mode;                /* see WMI_PHY_MODE */
     u8     num_channels;            /* how many channels follow */
-    u16    channel_list[1];         /* channels in Mhz */
+    u16    channel_list[];         /* channels in Mhz */
 } __attribute__((__packed__));
 
 /*
