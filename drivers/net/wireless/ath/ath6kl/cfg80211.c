@@ -2828,7 +2828,7 @@ static int ath6kl_start_ap(struct wiphy *wiphy, struct net_device *dev,
 	struct wmi_connect_cmd p;
 	int res;
 	int i, ret;
-	u16 rsn_capab = 0;
+	__le16 rsn_capab = 0;
 	int inactivity_timeout = 0;
 
 	ath6kl_dbg(ATH6KL_DBG_WLAN_CFG, "%s:\n", __func__);
@@ -3002,14 +3002,14 @@ static int ath6kl_start_ap(struct wiphy *wiphy, struct net_device *dev,
 	    test_bit(ATH6KL_FW_CAPABILITY_RSN_CAP_OVERRIDE,
 		     ar->fw_capabilities)) {
 		if (ar->target_type == TARGET_TYPE_AR6004) {
-			res = ath6kl_wmi_set_rsn_cap_cmd(ar->wmi, vif->fw_vif_idx, rsn_capab);
+			res = ath6kl_wmi_set_rsn_cap_cmd(ar->wmi, vif->fw_vif_idx, le16_to_cpu(rsn_capab));
 		} else {
 			res = ath6kl_wmi_set_ie_cmd(ar->wmi, vif->fw_vif_idx,
 										WLAN_EID_RSN, WMI_RSN_IE_CAPB,
 										(const u8 *) &rsn_capab,
 										sizeof(rsn_capab));
 		}
-		vif->rsn_capab = rsn_capab;
+		vif->rsn_capab = le16_to_cpu(rsn_capab);
 		if (res < 0)
 			return res;
 	}

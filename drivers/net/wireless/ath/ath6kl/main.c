@@ -593,10 +593,11 @@ static int ath6kl_commit_ch_switch(struct ath6kl_vif *vif, u16 channel)
 			if (ar->target_type == TARGET_TYPE_AR6004) {
 				ath6kl_wmi_set_rsn_cap_cmd(ar->wmi, vif->fw_vif_idx, vif->rsn_capab);
 			} else {
+				__le16 rsn_cap = cpu_to_le16(vif->rsn_capab);
 				ath6kl_wmi_set_ie_cmd(ar->wmi, vif->fw_vif_idx,
 									  WLAN_EID_RSN, WMI_RSN_IE_CAPB,
-									  (const u8 *) &vif->rsn_capab,
-									  sizeof(vif->rsn_capab));
+									  (const u8 *) &rsn_cap,
+									  sizeof(rsn_cap));
 			}
 		}
 
