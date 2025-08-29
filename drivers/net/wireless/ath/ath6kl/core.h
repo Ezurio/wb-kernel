@@ -153,6 +153,11 @@ enum ath6kl_fw_capability {
 	/* firmware doesn't support IP checksumming */
 	ATH6KL_FW_CAPABILITY_NO_IP_CHECKSUM,
 
+	/* Support for 40 MHz in 2G band*/
+	ATH6KL_FW_CAPABILITY_2GIG_HT40_SUPPORT,
+
+	ATH6KL_FW_CAPABILITY_MAC_AC,
+
 	/* this needs to be last */
 	ATH6KL_FW_CAPABILITY_MAX,
 };

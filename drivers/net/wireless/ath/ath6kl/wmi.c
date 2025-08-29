@@ -1724,8 +1724,12 @@ int ath6kl_wmi_set_rssi_filter_cmd(struct wmi *wmi, u8 if_idx, s8 rssi)
 {
 	struct sk_buff *skb;
 	struct wmi_set_rssi_filter_cmd *cmd;
+	struct ath6kl *ar = wmi->parent_dev;
 	int ret;
 
+	if (ar->target_type == TARGET_TYPE_AR6004)
+		return -EOPNOTSUPP;
+	
 	skb = ath6kl_wmi_get_new_buf(sizeof(*cmd));
 	if (!skb)
 		return -ENOMEM;
@@ -2145,7 +2149,11 @@ int ath6kl_wmi_enable_sched_scan_cmd(struct wmi *wmi, u8 if_idx, bool enable)
 {
 	struct sk_buff *skb;
 	struct wmi_enable_sched_scan_cmd *sc;
+	struct ath6kl *ar = wmi->parent_dev;
 	int ret;
+
+	if (ar->target_type == TARGET_TYPE_AR6004)
+		return -EOPNOTSUPP;
 
 	skb = ath6kl_wmi_get_new_buf(sizeof(*sc));
 	if (!skb)
@@ -3658,6 +3666,11 @@ int ath6kl_wmi_set_ie_cmd(struct wmi *wmi, u8 if_idx, u8 ie_id, u8 ie_field,
 {
 	struct sk_buff *skb;
 	struct wmi_set_ie_cmd *p;
+	struct ath6kl *ar = wmi->parent_dev;
+
+	if (ar->target_type == TARGET_TYPE_AR6004) {
+		return -EOPNOTSUPP;
+	}
 
 	skb = ath6kl_wmi_get_new_buf(sizeof(*p) + ie_len);
 	if (!skb)
@@ -4448,7 +4461,7 @@ static int ath6kl_genl_wmi_passthru (struct sk_buff *skb_2, struct genl_info *in
 					}
 					}
 					break;
-				case 0xf0b0:
+				case WMI_SET_REGDOMAIN_CMDID_6K4:
 					if (ar->target_type == TARGET_TYPE_AR6003)
 						wmi_cmd = WMI_SET_REGDOMAIN_CMDID;
 					break;
@@ -4827,6 +4840,7 @@ int ath6kl_wmi_set_rsn_cap_cmd(struct wmi *wmi, u8 if_idx,
 {
 	struct sk_buff *skb;
 	struct wmi_rsn_cap_cmd *cmd;
+	struct ath6kl *ar = wmi->parent_dev;
 	int ret;
 
 	skb = ath6kl_wmi_get_new_buf(sizeof(*cmd));
@@ -4836,9 +4850,13 @@ int ath6kl_wmi_set_rsn_cap_cmd(struct wmi *wmi, u8 if_idx,
 	cmd = (struct wmi_rsn_cap_cmd *) skb->data;
 	cmd->rsn_cap = cpu_to_le16(rsn_cap);
 
-#define _WMI_SET_RSN_CAP_CMDID 0xF082
-	ret = ath6kl_wmi_cmd_send(wmi, if_idx, skb, _WMI_SET_RSN_CAP_CMDID,
-			NO_SYNC_WMIFLAG);
+	if (ar->target_type == TARGET_TYPE_AR6004) {
+		ret = ath6kl_wmi_cmd_send(wmi, if_idx, skb, (enum wmi_cmd_id )WMI_SET_RSN_CAP_CMDID_6K4,
+				NO_SYNC_WMIFLAG);
+	} else {
+		ret = ath6kl_wmi_cmd_send(wmi, if_idx, skb, WMI_SET_RSN_CAP_CMDID,
+				NO_SYNC_WMIFLAG);
+	}
 
 	return ret;
 }
