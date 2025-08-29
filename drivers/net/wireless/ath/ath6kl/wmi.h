@@ -644,6 +644,11 @@ enum wmi_cmd_id {
 	WMI_ENABLE_SCHED_SCAN_CMDID,
 };
 
+enum wmi_cmd_id_6k4 {
+	WMI_SET_RSN_CAP_CMDID_6K4   = 0xF082,
+	WMI_SET_REGDOMAIN_CMDID_6K4 = 0xF0B0,
+};
+
 enum wmi_mgmt_frame_type {
 	WMI_FRAME_BEACON = 0,
 	WMI_FRAME_PROBE_REQ,
