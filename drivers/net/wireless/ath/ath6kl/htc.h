@@ -431,6 +431,8 @@ struct htc_endpoint_credit_dist {
 	 * that has non-zero credits to recover.
 	 */
 	int txq_depth;
+
+	int halted;
 };
 
 /*
@@ -576,6 +578,7 @@ struct ath6kl_htc_ops {
 			    struct ath6kl_htc_credit_info *cred_info);
 	int (*tx_complete)(struct ath6kl *ar, struct sk_buff *skb);
 	int (*rx_complete)(struct ath6kl *ar, struct sk_buff *skb, u8 pipe);
+	void (*sync_complete)(struct ath6kl *ar, struct sk_buff *skb);
 };
 
 struct ath6kl_device;

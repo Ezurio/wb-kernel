@@ -374,9 +374,11 @@ static int ath6kl_init_service_ep(struct ath6kl *ar)
 	 * For the remaining data services set the connection flag to
 	 * reduce dribbling, if configured to do so.
 	 */
-	connect.conn_flags |= HTC_CONN_FLGS_REDUCE_CRED_DRIB;
 	connect.conn_flags &= ~HTC_CONN_FLGS_THRESH_MASK;
-	connect.conn_flags |= HTC_CONN_FLGS_THRESH_LVL_HALF;
+	if (!test_bit(SUMMIT_FW_CAPABILITY_SYNC_EVENT, ar->fw_capabilities)) {
+		connect.conn_flags |= HTC_CONN_FLGS_REDUCE_CRED_DRIB;
+		connect.conn_flags |= HTC_CONN_FLGS_THRESH_LVL_HALF;
+	 }
 
 	connect.svc_id = WMI_DATA_BE_SVC;
 
@@ -1721,6 +1723,7 @@ static const struct fw_capa_str_map {
 	{ ATH6KL_FW_CAPABILITY_NO_IP_CHECKSUM, "no-ip-checksum" },
 	{ ATH6KL_FW_CAPABILITY_2GIG_HT40_SUPPORT, "2g-ht40-support" },
 	{ ATH6KL_FW_CAPABILITY_MAC_AC, "macaddr-acl" },
+	{ SUMMIT_FW_CAPABILITY_SYNC_EVENT, "sync-event" },
 };
 
 static const char *ath6kl_init_get_fw_capa_name(unsigned int id)

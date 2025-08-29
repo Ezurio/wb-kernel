@@ -25,6 +25,7 @@
 #include "../regd.h"
 #include "../regd_common.h"
 #include "wmiconfig.h"
+#include "htc-ops.h"
 
 static int ath6kl_wmi_sync_point(struct wmi *wmi, u8 if_idx);
 
@@ -2514,18 +2515,33 @@ static int ath6kl_wmi_data_sync_send(struct wmi *wmi, struct sk_buff *skb,
 	return ret;
 }
 
+bool summit_ath6kl_wmi_is_sync_msg(void *data, u32 len) 
+{
+	struct wmi_data_hdr *data_hdr = (struct wmi_data_hdr *)data;
+
+	if (len >= sizeof(struct wmi_data_hdr)) {
+		if (data_hdr->info & (SYNC_MSGTYPE << WMI_DATA_HDR_MSG_TYPE_SHIFT )) {
+			return true;
+		}
+	}
+
+	return false;
+}
+
 static int ath6kl_wmi_sync_point(struct wmi *wmi, u8 if_idx)
 {
 	struct sk_buff *skb;
 	struct wmi_sync_cmd *cmd;
 	struct wmi_data_sync_bufs data_sync_bufs[WMM_NUM_AC];
 	enum htc_endpoint_id ep_id;
-	u8 index, num_pri_streams = 0;
+	u8 index, num_pri_streams, sync_map = 0;
 	int ret = 0;
 
 	memset(data_sync_bufs, 0, sizeof(data_sync_bufs));
 
 	spin_lock_bh(&wmi->lock);
+
+	sync_map = wmi->fat_pipe_exist;
 
 	for (index = 0; index < WMM_NUM_AC; index++) {
 		if (wmi->fat_pipe_exist & (1 << index)) {
@@ -2547,7 +2563,7 @@ static int ath6kl_wmi_sync_point(struct wmi *wmi, u8 if_idx)
 	 * In the SYNC cmd sent on the control Ep, send a bitmap
 	 * of the data eps on which the Data Sync will be sent
 	 */
-	cmd->data_sync_map = wmi->fat_pipe_exist;
+	cmd->data_sync_map = sync_map;
 
 	for (index = 0; index < num_pri_streams; index++) {
 		data_sync_bufs[index].skb = ath6kl_buf_alloc(0);
@@ -4244,6 +4260,10 @@ static int ath6kl_wmi_proc_events(struct wmi *wmi, struct sk_buff *skb)
 	case WMI_P2P_INFO_EVENTID:
 		ath6kl_dbg(ATH6KL_DBG_WMI, "WMI_P2P_INFO_EVENTID\n");
 		ret = ath6kl_wmi_p2p_info_event_rx(datap, len);
+		break;
+	case WMI_IN_SYNC_EVENTID_6K4:
+		ath6kl_dbg(ATH6KL_DBG_WMI, "WMI_IN_SYNC_EVENTID\n");
+		ath6kl_htc_sync_complete(ar, skb);
 		break;
 	default:
 		/* may be the event is interface specific */

@@ -109,5 +109,10 @@ static inline void ath6kl_htc_rx_complete(struct ath6kl *ar,
 	ar->htc_ops->rx_complete(ar, skb, pipe);
 }
 
+static inline void ath6kl_htc_sync_complete(struct ath6kl *ar,
+						  struct sk_buff *skb)
+{
+	ar->htc_ops->sync_complete(ar, skb);
+}
 
 #endif
