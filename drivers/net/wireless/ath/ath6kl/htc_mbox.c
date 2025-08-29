@@ -25,6 +25,8 @@
 
 #define CALC_TXRX_PADDED_LEN(dev, len)  (__ALIGN_MASK((len), (dev)->block_mask))
 
+extern bool summit_ath6kl_wmi_is_sync_msg(void *data, u32 len);
+
 static void ath6kl_htc_mbox_cleanup(struct htc_target *target);
 static void ath6kl_htc_mbox_stop(struct htc_target *target);
 static int ath6kl_htc_mbox_add_rxbuf_multiple(struct htc_target *target,
@@ -213,12 +215,52 @@ static void ath6kl_credit_update(struct ath6kl_htc_credit_info *cred_info,
 	}
 }
 
+static void summit_ath6kl_credit_halt(struct htc_target *target, struct htc_endpoint_credit_dist *ep_dist)
+{
+	struct ath6kl *ar = target->dev->ar;
+	
+	if (!test_bit(SUMMIT_FW_CAPABILITY_SYNC_EVENT, ar->fw_capabilities))
+		return;
+
+	ep_dist->halted++;
+	ath6kl_dbg(ATH6KL_DBG_CREDIT | ATH6KL_DBG_HTC,"%s ep %d - %d.\n", ep_dist->halted==1?"Halt":"Inc", ep_dist->endpoint, ep_dist->halted);
+}
+
+static void summit_ath6kl_htc_mbox_sync_complete(struct ath6kl *ar, struct sk_buff *skb)
+{
+	struct htc_endpoint_credit_dist *cred_dist;
+	u8 ac = 0;
+	u8 sync_map = 0;
+
+	if (!test_bit(SUMMIT_FW_CAPABILITY_SYNC_EVENT, ar->fw_capabilities))
+		return;
+
+	if(skb && skb->len >=1)
+		sync_map = *(u8*)skb->data;
+
+	ath6kl_dbg(ATH6KL_DBG_CREDIT | ATH6KL_DBG_HTC,"Sync Complete 0x%x.\n", sync_map);
+
+	list_for_each_entry(cred_dist, &ar->htc_target->cred_dist_list, list) {
+		if (cred_dist->endpoint == ENDPOINT_0)
+			continue;
+
+		if (cred_dist->halted == 0) 
+			continue;
+
+		ac = ar->ep2ac_map[cred_dist->endpoint];
+		if ( sync_map & (1 << ac)) {
+			cred_dist->halted--;
+			ath6kl_dbg(ATH6KL_DBG_CREDIT | ATH6KL_DBG_HTC,"%s ep %d - %d.\n", cred_dist->halted==0?"Resume":"Dec", cred_dist->endpoint, cred_dist->halted);
+		}
+	}
+}
+
 /*
  * HTC has an endpoint that needs credits, ep_dist is the endpoint in
  * question.
  */
 static void ath6kl_credit_seek(struct ath6kl_htc_credit_info *cred_info,
-				struct htc_endpoint_credit_dist *ep_dist)
+				struct htc_endpoint_credit_dist *ep_dist, bool bSyncMsg)
 {
 	struct htc_endpoint_credit_dist *curdist_list;
 	int credits = 0;
@@ -288,6 +330,8 @@ out:
 	/* did we find some credits? */
 	if (credits)
 		ath6kl_credit_deposit(cred_info, ep_dist, credits);
+	else if (bSyncMsg)
+		ath6kl_dbg(ATH6KL_DBG_CREDIT,"Failed to get SYNC credit on ep%d.\n", ep_dist->endpoint);
 
 	ep_dist->seek_cred = 0;
 }
@@ -546,13 +590,16 @@ static int ath6kl_htc_tx_issue(struct htc_target *target,
 static int htc_check_credits(struct htc_target *target,
 			     struct htc_endpoint *ep, u8 *flags,
 			     enum htc_endpoint_id eid, unsigned int len,
-			     int *req_cred)
+			     int *req_cred, bool bSyncMsg)
 {
 	*req_cred = (len > target->tgt_cred_sz) ?
 		     DIV_ROUND_UP(len, target->tgt_cred_sz) : 1;
 
-	ath6kl_dbg(ATH6KL_DBG_CREDIT, "credit check need %d got %d\n",
-		   *req_cred, ep->cred_dist.credits);
+	ath6kl_dbg(ATH6KL_DBG_CREDIT, "cred need %d got %d st %d\n",
+		   *req_cred, ep->cred_dist.credits, ep->cred_dist.halted);
+
+	if (ep->cred_dist.halted)
+		return -EINVAL;
 
 	if (ep->cred_dist.credits < *req_cred) {
 		if (eid == ENDPOINT_0)
@@ -561,7 +608,7 @@ static int htc_check_credits(struct htc_target *target,
 		/* Seek more credits */
 		ep->cred_dist.seek_cred = *req_cred - ep->cred_dist.credits;
 
-		ath6kl_credit_seek(target->credit_info, &ep->cred_dist);
+		ath6kl_credit_seek(target->credit_info, &ep->cred_dist, bSyncMsg);
 
 		ep->cred_dist.seek_cred = 0;
 
@@ -581,7 +628,7 @@ static int htc_check_credits(struct htc_target *target,
 		ep->cred_dist.seek_cred =
 		ep->cred_dist.cred_per_msg - ep->cred_dist.credits;
 
-		ath6kl_credit_seek(target->credit_info, &ep->cred_dist);
+		ath6kl_credit_seek(target->credit_info, &ep->cred_dist, false);
 
 		/* see if we were successful in getting more */
 		if (ep->cred_dist.credits < ep->cred_dist.cred_per_msg) {
@@ -602,11 +649,13 @@ static void ath6kl_htc_tx_pkts_get(struct htc_target *target,
 {
 	int req_cred;
 	u8 flags;
+	bool  bSyncMsg;
 	struct htc_packet *packet;
 	unsigned int len;
 
 	while (true) {
 		flags = 0;
+		bSyncMsg = false;
 
 		if (list_empty(&endpoint->txq))
 			break;
@@ -620,9 +669,20 @@ static void ath6kl_htc_tx_pkts_get(struct htc_target *target,
 		len = CALC_TXRX_PADDED_LEN(target,
 					   packet->act_len + HTC_HDR_LENGTH);
 
+		if (packet->info.tx.tag == ATH6KL_CONTROL_PKT_TAG) {
+			 if (summit_ath6kl_wmi_is_sync_msg(packet->buf, packet->act_len)) {
+				bSyncMsg = true;
+			 }
+		}
+
 		if (htc_check_credits(target, endpoint, &flags,
-				      packet->endpoint, len, &req_cred))
+				      packet->endpoint, len, &req_cred, bSyncMsg))
 			break;
+
+		if (bSyncMsg) {
+			//Halt Q
+			summit_ath6kl_credit_halt(target, &endpoint->cred_dist);
+		}
 
 		/* now we can fully move onto caller's queue */
 		packet = list_first_entry(&endpoint->txq, struct htc_packet,
@@ -2931,6 +2991,7 @@ static const struct ath6kl_htc_ops ath6kl_htc_mbox_ops = {
 	.get_rxbuf_num = ath6kl_htc_mbox_get_rxbuf_num,
 	.add_rxbuf_multiple = ath6kl_htc_mbox_add_rxbuf_multiple,
 	.credit_setup = ath6kl_htc_mbox_credit_setup,
+	.sync_complete = summit_ath6kl_htc_mbox_sync_complete,
 };
 
 void ath6kl_htc_mbox_attach(struct ath6kl *ar)
