@@ -158,6 +158,9 @@ enum ath6kl_fw_capability {
 
 	ATH6KL_FW_CAPABILITY_MAC_AC,
 
+	/* Firmware sends sync event when endpoint  resumes*/
+	SUMMIT_FW_CAPABILITY_SYNC_EVENT,
+
 	/* this needs to be last */
 	ATH6KL_FW_CAPABILITY_MAX,
 };

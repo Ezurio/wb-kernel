@@ -1511,6 +1511,7 @@ enum wmi_event_id {
 	WMI_GET_RSN_CAP_EVENTID,
 
 	WMI_TXE_NOTIFY_EVENTID,
+	WMI_IN_SYNC_EVENTID_6K4 = 0x902f,
 };
 
 struct wmi_ready_event_2 {
@@ -2812,5 +2813,6 @@ void ath6kl_wmi_reset(struct wmi *wmi);
 int ath6kl_get_txpower(struct wiphy *wiphy, int *dbm);
 
 void summit_ath6kl_wmi_init_channels(struct ath6kl *ar);
+bool summit_ath6kl_wmi_is_sync_msg(void *data, u32 len);
 
 #endif /* WMI_H */

@@ -1700,6 +1700,11 @@ static int ath6kl_htc_pipe_credit_setup(struct htc_target *target,
 	return 0;
 }
 
+static void summit_ath6kl_htc_pipe_sync_complete(struct ath6kl *ar, struct sk_buff *skb)
+{
+	return;
+}
+
 static const struct ath6kl_htc_ops ath6kl_htc_pipe_ops = {
 	.create = ath6kl_htc_pipe_create,
 	.wait_target = ath6kl_htc_pipe_wait_target,
@@ -1716,6 +1721,7 @@ static const struct ath6kl_htc_ops ath6kl_htc_pipe_ops = {
 	.credit_setup = ath6kl_htc_pipe_credit_setup,
 	.tx_complete = ath6kl_htc_pipe_tx_complete,
 	.rx_complete = ath6kl_htc_pipe_rx_complete,
+	.sync_complete = summit_ath6kl_htc_pipe_sync_complete,
 };
 
 void ath6kl_htc_pipe_attach(struct ath6kl *ar)
