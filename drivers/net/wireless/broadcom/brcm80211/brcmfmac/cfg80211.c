@@ -8793,34 +8793,6 @@ static s32 brcmf_dongle_roam(struct brcmf_if *ifp)
 		goto roam_setup_done;
 	}
 
-	err = brcmf_fil_cmd_data_get(ifp, BRCMF_C_GET_BANDLIST, &bandlist,
-				     sizeof(bandlist));
-	if (err) {
-		bphy_err(drvr, "could not obtain band info: err=%d\n", err);
-		goto roam_setup_done;
-	}
-	/* To enhance compatibility set each band's roam properties instead of
-	 * using all band. BAND_5G is 1, BAND_2G is 2 and BAND_6G is 3.
-	 */
-	n_bands = le32_to_cpu(bandlist[0]);
-	for (i = 1; i <= n_bands; i++) {
-		roamtrigger[0] = cpu_to_le32(WL_ROAM_TRIGGER_LEVEL);
-		roamtrigger[1] = cpu_to_le32(bandlist[i]);
-		err = brcmf_fil_cmd_data_set(ifp, BRCMF_C_SET_ROAM_TRIGGER,
-					     (void *)roamtrigger, sizeof(roamtrigger));
-		if (err)
-			bphy_err(drvr, "WLC_SET_ROAM_TRIGGER error (%d), band %d\n",
-				 err, bandlist[i]);
-
-		roam_delta[0] = cpu_to_le32(WL_ROAM_DELTA);
-		roam_delta[1] = cpu_to_le32(bandlist[i]);
-		err = brcmf_fil_cmd_data_set(ifp, BRCMF_C_SET_ROAM_DELTA,
-					     (void *)roam_delta, sizeof(roam_delta));
-		if (err)
-			bphy_err(drvr, "WLC_SET_ROAM_DELTA error (%d), band %d\n",
-				 err, bandlist[i]);
-	}
-
 	switch (drvr->bus_if->chip) {
 	case CY_CC_55572_CHIP_ID:
 	case CY_CC_55500_CHIP_ID:
@@ -8836,6 +8808,34 @@ static s32 brcmf_dongle_roam(struct brcmf_if *ifp)
 		}
 		break;
 	default:
+		err = brcmf_fil_cmd_data_get(ifp, BRCMF_C_GET_BANDLIST, &bandlist,
+						sizeof(bandlist));
+		if (err) {
+			bphy_err(drvr, "could not obtain band info: err=%d\n", err);
+			goto roam_setup_done;
+		}
+		/* To enhance compatibility set each band's roam properties instead of
+		* using all band. BAND_5G is 1, BAND_2G is 2 and BAND_6G is 3.
+		*/
+		n_bands = le32_to_cpu(bandlist[0]);
+		for (i = 1; i <= n_bands; i++) {
+			roamtrigger[0] = cpu_to_le32(WL_ROAM_TRIGGER_LEVEL);
+			roamtrigger[1] = cpu_to_le32(bandlist[i]);
+			err = brcmf_fil_cmd_data_set(ifp, BRCMF_C_SET_ROAM_TRIGGER,
+							(void *)roamtrigger, sizeof(roamtrigger));
+			if (err)
+				bphy_err(drvr, "WLC_SET_ROAM_TRIGGER error (%d), band %d\n",
+					err, bandlist[i]);
+
+			roam_delta[0] = cpu_to_le32(WL_ROAM_DELTA);
+			roam_delta[1] = cpu_to_le32(bandlist[i]);
+			err = brcmf_fil_cmd_data_set(ifp, BRCMF_C_SET_ROAM_DELTA,
+							(void *)roam_delta, sizeof(roam_delta));
+			if (err)
+				bphy_err(drvr, "WLC_SET_ROAM_DELTA error (%d), band %d\n",
+					err, bandlist[i]);
+		}
+
 		break;
 	}
 
