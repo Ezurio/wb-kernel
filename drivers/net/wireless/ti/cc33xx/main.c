@@ -1968,7 +1968,7 @@ static int __maybe_unused cc33xx_op_resume(struct ieee80211_hw *hw)
 	struct cc33xx_vif *wlvif;
 	unsigned long flags;
 	bool run_irq_work = false, pending_recovery;
-	int ret;
+	int ret = 0;
 
 	cc33xx_debug(DEBUG_MAC80211, "mac80211 resume wow=%d",
 		     wl->keep_device_power);
