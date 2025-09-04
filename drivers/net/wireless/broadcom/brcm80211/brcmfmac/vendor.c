@@ -17,6 +17,7 @@
 #include "fwil.h"
 #include "common.h"
 #include "vendor_ifx.h"
+#include "vendor_sona.h"
 
 static int brcmf_cfg80211_vndr_cmds_dcmd_handler(struct wiphy *wiphy,
 						 struct wireless_dev *wdev,
@@ -272,6 +273,17 @@ brcmf_wiphy_icmp_echo_req_event_handler(struct brcmf_if *ifp,
 }
 
 const struct wiphy_vendor_command brcmf_vendor_cmds[] = {
+	{
+		{
+			.vendor_id = SONA_OUI,
+			.subcmd    = SONA_CMD_RADIO_ID,
+		},
+		.flags = WIPHY_VENDOR_CMD_NEED_WDEV |
+			 WIPHY_VENDOR_CMD_NEED_NETDEV,
+		.policy = radio_id_policy,
+		.maxattr = ATTR_RID_MAX,
+		.doit  = sona_vendor_cmd_radio_id,
+	},
 	{
 		{
 			.vendor_id = BROADCOM_OUI,
