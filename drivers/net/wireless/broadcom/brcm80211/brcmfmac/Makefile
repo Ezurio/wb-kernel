@@ -24,6 +24,7 @@ brcmfmac-objs += \
 		feature.o \
 		btcoex.o \
 		vendor.o \
+		vendor_sona.o \
 		pno.o \
 		xtlv.o \
 		vendor_ifx.o \
