@@ -24,6 +24,7 @@
 #include "init.h"
 #include "debugfs.h"
 #include "testmode.h"
+#include "vendor_sona.h"
 #include "scan.h"
 #include "sysfs.h"
 #include "event.h"
@@ -6021,6 +6022,8 @@ static void wlcore_nvs_cb(const struct firmware *fw, void *context)
 	ret = cc33xx_init_ieee80211(wl);
 	if (ret)
 		goto out_irq;
+
+	sona_set_vendor_commands(wl->hw->wiphy);
 
 	ret = cc33xx_register_hw(wl);
 	if (ret)

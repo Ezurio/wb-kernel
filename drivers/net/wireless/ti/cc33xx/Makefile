@@ -3,7 +3,7 @@
 ccflags-y += $(call cc-disable-warning,enum-conversion)
 
 cc33xx-objs		= main.o cmd.o io.o event.o tx.o rx.o ps.o acx.o \
-			  boot.o init.o debugfs.o scan.o sysfs.o
+			  boot.o init.o debugfs.o scan.o sysfs.o vendor_sona.o
 
 cc33xx_spi-objs 	= spi.o
 cc33xx_sdio-objs	= sdio.o
