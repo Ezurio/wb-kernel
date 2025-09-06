@@ -62,6 +62,18 @@ void ath6kl_recovery_hb_event(struct ath6kl *ar, u32 cookie)
 		ar->fw_recovery.hb_pending = false;
 }
 
+void ath6kl_recovery_hb_timer_reset(struct ath6kl *ar) 
+{
+	if (test_bit(RECOVERY_CLEANUP, &ar->flag) ||
+	    (ar->state == ATH6KL_STATE_RECOVERY))
+		return;
+
+	if (ar->fw_recovery.hb_poll)
+		mod_timer(&ar->fw_recovery.hb_timer, jiffies +
+			  msecs_to_jiffies(ar->fw_recovery.hb_poll));
+
+}
+
 static void ath6kl_recovery_hb_timer(struct timer_list *t)
 {
 	struct ath6kl *ar = from_timer(ar, t, fw_recovery.hb_timer);

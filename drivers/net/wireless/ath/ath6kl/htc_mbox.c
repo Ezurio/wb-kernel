@@ -1651,6 +1651,14 @@ static void htc_proc_cred_rpt(struct htc_target *target,
 		tot_credits += rpt->credits;
 	}
 
+	if (from_ep == ENDPOINT_0) {
+		/* Under extreme load, FW may not get to servicing HB in time so 
+		 * extend that time since it is clear FW is still running and
+		 * the wmi control plane is still operational/not locked.
+		 */
+		ath6kl_recovery_hb_timer_reset(target->dev->ar);
+	}
+
 	if (dist) {
 		/*
 		 * This was a credit return based on a completed send
