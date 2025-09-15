@@ -278,11 +278,16 @@ static const struct ieee80211_regdomain *cfg80211_world_regdom =
 	&world_regdom;
 
 static char *ieee80211_regdom = "00";
+static char *ieee80211_regdb = NULL;
 static char user_alpha2[2];
 static const struct ieee80211_regdomain *cfg80211_user_regdom;
 
 module_param(ieee80211_regdom, charp, 0444);
 MODULE_PARM_DESC(ieee80211_regdom, "IEEE 802.11 regulatory domain code");
+module_param(ieee80211_regdb, charp, 0444);
+MODULE_PARM_DESC(ieee80211_regdb, "IEEE 802.11 regulatory database");
+
+static char * cfg80211_driver_regdb_path = NULL;
 
 static void reg_free_request(struct regulatory_request *request)
 {
@@ -1030,17 +1035,25 @@ static void regdb_fw_cb(const struct firmware *fw, void *context)
 	int set_error = 0;
 	bool restore = true;
 	void *db;
+	char * p_path = "regulatory.db";
+
+	if (ieee80211_regdb)
+		p_path = ieee80211_regdb;
 
 	if (!fw) {
-		pr_info("failed to load regulatory.db\n");
+		pr_info("failed to load %s\n", p_path);
 		set_error = -ENODATA;
 	} else if (!valid_regdb(fw->data, fw->size)) {
-		pr_info("loaded regulatory.db is malformed or signature is missing/invalid\n");
+		pr_info("loaded %s is malformed or signature is missing/invalid\n", p_path);
 		set_error = -EINVAL;
 	}
 
 	rtnl_lock();
-	if (regdb && !IS_ERR(regdb)) {
+	if (!ieee80211_regdb && cfg80211_driver_regdb_path) {
+		/* driver specified regdb in effect, ignore this
+		 * restore and free new db
+		 */
+	} else if (regdb && !IS_ERR(regdb)) {
 		/* negative case - a bug
 		 * positive case - can happen due to race in case of multiple cb's in
 		 * queue, due to usage of asynchronous callback
@@ -1074,6 +1087,7 @@ MODULE_FIRMWARE("regulatory.db");
 static int query_regdb_file(const char *alpha2)
 {
 	int err;
+	char * p_path = "regulatory.db";
 
 	ASSERT_RTNL();
 
@@ -1084,7 +1098,13 @@ static int query_regdb_file(const char *alpha2)
 	if (!alpha2)
 		return -ENOMEM;
 
-	err = request_firmware_nowait(THIS_MODULE, true, "regulatory.db",
+	if (ieee80211_regdb != NULL) {
+		pr_info("Loading regulatory database %s\n",
+			ieee80211_regdb);
+		p_path = ieee80211_regdb;
+	}
+	
+	err = request_firmware_nowait(THIS_MODULE, true, p_path,
 				      &reg_pdev->dev, GFP_KERNEL,
 				      (void *)alpha2, regdb_fw_cb);
 	if (err)
@@ -1100,8 +1120,14 @@ int reg_reload_regdb(void)
 	int err;
 	const struct ieee80211_regdomain *current_regdomain;
 	struct regulatory_request *request;
+	char * p_path = "regulatory.db";
 
-	err = request_firmware(&fw, "regulatory.db", &reg_pdev->dev);
+	if (ieee80211_regdb != NULL)
+		p_path = ieee80211_regdb;
+	else if (cfg80211_driver_regdb_path != NULL)
+		p_path = cfg80211_driver_regdb_path;
+
+	err = request_firmware(&fw, p_path, &reg_pdev->dev);
 	if (err)
 		return err;
 
@@ -1155,6 +1181,81 @@ static bool reg_query_database(struct regulatory_request *request)
 
 	return false;
 }
+
+int regulatory_load_regdb(const char * regdb_path)
+{
+	const struct firmware *fw;
+	void *db;
+	int err;
+
+	if (!regdb_path)
+		return -EINVAL;
+
+	rtnl_lock();
+	if (ieee80211_regdb != NULL) {
+		rtnl_unlock();
+		return 0;
+	}
+
+	if (cfg80211_driver_regdb_path != NULL)  {
+		if (strcmp(cfg80211_driver_regdb_path, regdb_path) != 0) {
+			pr_err("Multiple driver specified regulatory databases are not supported, aborting!\n");
+			rtnl_unlock();
+			return -EINVAL;
+		}
+
+		/* There are cases such as driver reload where we may get a request to load the same database again */
+		rtnl_unlock();
+		return 0;
+	}
+
+	cfg80211_driver_regdb_path = kstrdup(regdb_path, GFP_KERNEL);
+	if (!cfg80211_driver_regdb_path) {
+		rtnl_unlock();
+		return -ENOMEM;
+	}
+	rtnl_unlock();
+
+	pr_info("Loading driver specified regulatory database %s\n",
+		cfg80211_driver_regdb_path);
+
+	err = request_firmware(&fw, cfg80211_driver_regdb_path, &reg_pdev->dev);
+	if (err) {
+		pr_err("failed to load %s: %d\n", cfg80211_driver_regdb_path, err);
+		goto out;
+	}
+
+	if (!valid_regdb(fw->data, fw->size)) {
+		pr_err("loaded %s is malformed or signature is missing/invalid\n",
+		       cfg80211_driver_regdb_path);
+		err = -ENODATA;
+		goto out;
+	}
+
+	db = kmemdup(fw->data, fw->size, GFP_KERNEL);
+	if (!db) {
+		err = -ENOMEM;
+		goto out;
+	}
+
+	rtnl_lock();
+	if (!IS_ERR_OR_NULL(regdb))
+		kfree(regdb);
+	regdb = db;
+
+	restore_regulatory_settings(true, false);
+
+	rtnl_unlock();
+
+out:
+	release_firmware(fw);
+	/* Intentionally leaving cfg80211_driver_regdb_path set in error conditions,
+	 * preventing other adapters from potentially covering up the problem.
+	 */
+
+	return err;
+}
+EXPORT_SYMBOL(regulatory_load_regdb);
 
 bool reg_is_valid_request(const char *alpha2)
 {
@@ -4439,5 +4540,6 @@ void regulatory_exit(void)
 	if (!IS_ERR_OR_NULL(cfg80211_user_regdom))
 		kfree(cfg80211_user_regdom);
 
+	kfree(cfg80211_driver_regdb_path);
 	free_regdb_keyring();
 }
