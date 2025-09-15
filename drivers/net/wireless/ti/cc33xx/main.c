@@ -32,6 +32,8 @@
 
 char regdomain[REGDOMAIN_LEN];
 
+#define REGULATORY_DB_NAME "regulatory_sona_ti.db"
+
 #define CC33XX_WAKEUP_TIMEOUT 					500
 #define CC33XX_FW_RX_PACKET_RAM 				(9 * 1024)
 #define CC33XX_GENERAL_ERROR_READ_TIMEOUT_MSEC 	(3000)
@@ -5936,6 +5938,12 @@ static int cc33xx_init_regdb(struct cc33xx *wl)
 	char alpha2[3];
 	char * pCountryCode;
 
+	if (regulatory_load_regdb(REGULATORY_DB_NAME)) {
+		cc33xx_error("Could not load regulatory database %s, aborting!",
+			     REGULATORY_DB_NAME);
+		return -EINVAL;
+	}
+
 	memset(alpha2, 0, sizeof(alpha2));
 	if (wl->conf.core.country_code == 0x00) {
 		alpha2[0] = '0';
@@ -6031,7 +6039,7 @@ static void wlcore_nvs_cb(const struct firmware *fw, void *context)
 
 	ret = cc33xx_init_regdb(wl);
 	if (ret)
-		goto out_irq;
+		goto out_unreg;
 
 	ret = wlcore_sysfs_init(wl);
 	if (ret)
