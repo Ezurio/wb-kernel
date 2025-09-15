@@ -7147,6 +7147,22 @@ int regulatory_set_wiphy_regd_sync(struct wiphy *wiphy,
 				   struct ieee80211_regdomain *rd);
 
 /**
+ * regulatory_load_regdb - load the regulatory database from the specified file
+ * @regdb_path: path to the regulatory database file
+ * 
+ * This function can be used by drivers to specify a specific regulatory database
+ * file to load. This regulatory database will be used instead of the standard
+ * regulatory.db that is loaded by cfg80211.
+ * 
+ * Note that this database is the global regulatory database, it is not specific
+ * to the wiphy that calls this function. Only one regulatory database can be loaded,
+ * so if multiple drivers call this function the first one will win.
+ * 
+ * Return: 0 on success.
+ */
+int regulatory_load_regdb(const char * regdb_path);
+
+/**
  * wiphy_apply_custom_regulatory - apply a custom driver regulatory domain
  * @wiphy: the wireless device we want to process the regulatory domain on
  * @regd: the custom regulatory domain to use for this wiphy
