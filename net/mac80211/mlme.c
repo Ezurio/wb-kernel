@@ -5982,6 +5982,51 @@ abandon_assoc:
 	goto notify_driver;
 }
 
+#ifndef _REMOVE_SUMMIT_MODS_
+// return true if the probe response/beacon tsf is newer than cfg80211 bss
+// (or the cfg80211 bss is not found)
+static bool
+__ieee80211_tsf_is_newer(struct ieee80211_link_data *link,
+			  struct ieee80211_mgmt *mgmt, size_t len)
+{
+	struct ieee80211_sub_if_data *sdata = link->sdata;
+	struct ieee80211_local *local = sdata->local;
+	struct cfg80211_bss *cbss;
+	u64 bss_tsf, rx_tsf;
+
+	// get largest cfg80211 bss tsf
+	cbss = cfg80211_get_bss(local->hw.wiphy,
+				NULL, /* any channel */
+				mgmt->bssid,
+				NULL, 0, /* any ssid */
+				IEEE80211_BSS_TYPE_ANY,
+				IEEE80211_PRIVACY_ANY);
+	if (!cbss)
+		return true;
+	bss_tsf = 0;
+	{
+		const struct cfg80211_bss_ies *ies;
+		rcu_read_lock();
+		ies = rcu_dereference(cbss->ies);
+		if (ies && ies->tsf > bss_tsf)
+			bss_tsf = ies->tsf;
+		ies = rcu_dereference(cbss->beacon_ies);
+		if (ies && ies->tsf > bss_tsf)
+			bss_tsf = ies->tsf;
+		ies = rcu_dereference(cbss->proberesp_ies);
+		if (ies && ies->tsf > bss_tsf)
+			bss_tsf = ies->tsf;
+		rcu_read_unlock();
+	}
+	cfg80211_put_bss(local->hw.wiphy, cbss);
+
+	// get receive probe response tsf
+	rx_tsf = le64_to_cpu(mgmt->u.probe_resp.timestamp);
+
+	return (rx_tsf > bss_tsf);
+}
+#endif
+
 static void ieee80211_rx_bss_info(struct ieee80211_link_data *link,
 				  struct ieee80211_mgmt *mgmt, size_t len,
 				  struct ieee80211_rx_status *rx_status)
@@ -6041,6 +6086,11 @@ static void ieee80211_rx_mgmt_probe_resp(struct ieee80211_link_data *link,
 	if (baselen > len)
 		return;
 
+#ifndef _REMOVE_SUMMIT_MODS_
+	// prevent tsf/timestamp out-of-sync
+	// ignore probe-response already processed by scan
+	if (__ieee80211_tsf_is_newer(link, mgmt, len))
+#endif
 	ieee80211_rx_bss_info(link, mgmt, len, rx_status);
 
 	if (ifmgd->associated &&
