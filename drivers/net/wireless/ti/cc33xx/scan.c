@@ -88,11 +88,13 @@ static int cc33xx_cmd_build_probe_req(struct cc33xx *wl,
 	struct ieee80211_vif *vif = cc33xx_wlvif_to_vif(wlvif);
 	struct sk_buff *skb=NULL;
 	struct cc33xx_cmd_set_ies *cmd;
+    size_t alloc_size = sizeof(*cmd);
+    size_t res_len = sizeof(struct cc33xx_cmd_header);
 	int ret;
 
 	cc33xx_debug(DEBUG_SCAN, "build probe request scan_type %d", scan_type);
 
-	cmd = kzalloc(sizeof(*cmd), GFP_KERNEL);
+	cmd = kzalloc(alloc_size, GFP_KERNEL);
 	if (!cmd) {
 		ret = -ENOMEM;
 		goto out;
@@ -124,11 +126,17 @@ static int cc33xx_cmd_build_probe_req(struct cc33xx *wl,
 
 	//Katya - temporary workaround - untill scan module is changed
 	usleep_range(10000, 11000);
-	ret = cc33xx_cmd_send(wl, CMD_SET_PROBE_IE, cmd, sizeof(*cmd), 0);
+	ret = cc33xx_cmd_send(wl, CMD_SET_PROBE_IE, cmd, alloc_size, res_len);
 
 	if (ret < 0) {
 		cc33xx_warning("cmd set_template failed: %d", ret);
 		goto out_free;
+	}
+
+    /* success is always a valid status */
+	if (!(cmd->header.status == CMD_STATUS_SUCCESS)) {
+		cc33xx_error("Set Probe IE command execute failure %d", cmd->header.status);
+		ret = -EINVAL;
 	}
 
 	out_free:

@@ -18,6 +18,7 @@
 
 
 #define CC33XX_BOOT_TIMEOUT 2000
+#define CC33XX_FW_HIF_INIT_DELAY 50
 
 struct hwinfo_bitmap
 {
@@ -162,7 +163,7 @@ static int wait_for_boot_irq(struct cc33xx *wl, u32 boot_irq_mask,
 	 *	and later to FW).
 	 * Work around this by explicitly triggering the IRQ handler which will
 	 * check the current device status after a safe delay. */
-	msleep(10);
+	msleep(CC33XX_FW_HIF_INIT_DELAY);
 	wlcore_irq(wl);	
 
 	ret = wait_for_completion_interruptible_timeout(

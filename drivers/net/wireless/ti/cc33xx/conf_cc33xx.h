@@ -25,7 +25,7 @@ struct cc33xx_conf_header {
 #define CC33XX_CONF_FW_MAJOR_VERSION 	0x0001
 #define CC33XX_CONF_FW_MINOR_VERSION 	0x0007
 #define CC33XX_CONF_FW_API_VERSION   	0x0000
-#define CC33XX_CONF_FW_BUILD_VERSION 	0x0131
+#define CC33XX_CONF_FW_BUILD_VERSION 	0x013C
 
 
 #define CC33XX_CONF_MASK				0x0000ffff
@@ -897,6 +897,7 @@ struct cc33xx_phy_conf {
 	int8_t   tx_psat_compensation_5GHz;
 	int8_t   psat_reserved;
 	uint8_t  Is85cDevice;
+	uint16_t product_type;
 	uint32_t gpio_data[4];
 	int16_t  xtalCorrAbove95C;
 	uint8_t  reserved[6];

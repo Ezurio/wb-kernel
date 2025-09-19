@@ -466,7 +466,16 @@ static void cc33xx_spi_disable_irq (struct device *child)
 	struct platform_device *pdev = glue->core;
 	struct wlcore_platdev_data *pdev_data = dev_get_platdata(&pdev->dev);
 
-	disable_irq(pdev_data->gpio_irq_num);
+	disable_irq_nosync(pdev_data->gpio_irq_num);
+}
+
+static void cc33xx_spi_sync_irq (struct device *child)
+{
+	struct cc33xx_spi_glue *glue = dev_get_drvdata(child->parent);
+	struct platform_device *pdev = glue->core;
+	struct wlcore_platdev_data *pdev_data = dev_get_platdata(&pdev->dev);
+
+	synchronize_irq(pdev_data->gpio_irq_num);
 }
 
 static void cc33xx_spi_interface_claim(struct device *child)
@@ -502,6 +511,8 @@ static irqreturn_t cc33xx_spi_irq_handler(int irq, void *cookie)
 }
 
 static struct cc33xx_if_operations spi_ops = {
+	.interface_claim		= cc33xx_spi_interface_claim,
+	.interface_release		= cc33xx_spi_interface_release,
 	.read				= cc33xx_spi_raw_read,
 	.write				= cc33xx_spi_raw_write,
 	.reset				= cc33xx_spi_reset,
@@ -512,8 +523,7 @@ static struct cc33xx_if_operations spi_ops = {
 	.set_irq_handler		= cc33xx_spi_set_irq_handler,
 	.enable_irq			= cc33xx_spi_enable_irq,
 	.disable_irq			= cc33xx_spi_disable_irq,
-	.interface_claim		= cc33xx_spi_interface_claim,
-	.interface_release		= cc33xx_spi_interface_release,
+	.sync_irq			= cc33xx_spi_sync_irq,
 };
 
 static const struct of_device_id wlcore_spi_of_match_table[] = {
