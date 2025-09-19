@@ -16,7 +16,7 @@
 #define MAJOR_VERSION 	1
 #define MINOR_VERSION 	7
 #define API_VERSION 	0
-#define BUILD_VERSION	233
+#define BUILD_VERSION	239
 
 
 /* The maximum number of Tx descriptors in all chip families */
@@ -376,15 +376,11 @@ enum CC33xx_FRAME_FORMAT {
 
 /* CC33xx HW Common Definitions */
 
-#define HOST_SYNC_PATTERN 	0x5C5C5C5C
-#define DEVICE_SYNC_PATTERN 0xABCDDCBA
+#define HOST_SYNC_PATTERN	0x5C5C5C5C
+#define DEVICE_SYNC_PATTERN	0xABCDDCBA
 #define NAB_DATA_ADDR		0x0000BFF0
 #define NAB_CONTROL_ADDR	0x0000BFF8
 #define NAB_STATUS_ADDR		0x0000BFFC
-
-#define NAB_SEND_CMD        0x940d // 0x900D
-#define NAB_SEND_FLAGS      0x08
-#define CC33xx_INTERNAL_DESC_SIZE   200
 
 #define NAB_EXTRA_BYTES 4
 

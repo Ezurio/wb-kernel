@@ -16,6 +16,7 @@ struct cc33xx;
 
 void wlcore_disable_interrupts_nosync(struct cc33xx *wl);
 void wlcore_enable_interrupts(struct cc33xx *wl);
+void wlcore_sync_interrupts(struct cc33xx *wl);
 void cc33xx_io_reset(struct cc33xx *wl);
 void cc33xx_io_init(struct cc33xx *wl);
 int __must_check wlcore_raw_read(struct cc33xx *wl, int addr,

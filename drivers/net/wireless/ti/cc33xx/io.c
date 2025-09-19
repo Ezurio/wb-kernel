@@ -32,6 +32,11 @@ void wlcore_disable_interrupts_nosync(struct cc33xx *wl)
 	wl->if_ops->disable_irq(wl->dev);
 }
 
+void wlcore_sync_interrupts(struct cc33xx *wl)
+{
+	wl->if_ops->sync_irq(wl->dev);
+}
+
 void wlcore_enable_interrupts(struct cc33xx *wl)
 {
 	wl->if_ops->enable_irq(wl->dev);

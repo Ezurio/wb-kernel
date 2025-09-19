@@ -97,6 +97,7 @@ struct cc33xx_if_operations {
 	void (*set_irq_handler) (struct device *child, void* irq_handler);
 	void (*enable_irq) (struct device *child);
 	void (*disable_irq) (struct device *child);
+	void (*sync_irq) (struct device *child);
 };
 
 struct wlcore_platdev_data {

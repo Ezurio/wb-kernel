@@ -392,6 +392,14 @@ static struct ieee80211_supported_band cc33xx_band_2ghz = {
 	.n_iftype_data = ARRAY_SIZE(iftype_data_2ghz),
 };
 
+/* can't be const, mac80211 writes to this */
+static struct ieee80211_supported_band cc33xx_band_2ghz_non_he = {
+	.channels = cc33xx_channels_2ghz,
+	.n_channels = ARRAY_SIZE(cc33xx_channels_2ghz),
+	.bitrates = cc33xx_rates,
+	.n_bitrates = ARRAY_SIZE(cc33xx_rates),
+};
+
 static const u8 he_if_types_ext_capa_sta[] = {
 	 [0] = WLAN_EXT_CAPA1_EXT_CHANNEL_SWITCHING,
 	 [2] = WLAN_EXT_CAPA3_MULTI_BSSID_SUPPORT,
@@ -569,6 +577,13 @@ static struct ieee80211_supported_band cc33xx_band_5ghz = {
 	.iftype_data = iftype_data_5ghz,
 	.n_iftype_data = ARRAY_SIZE(iftype_data_5ghz),
 	
+};
+
+static struct ieee80211_supported_band cc33xx_band_5ghz_non_he = {
+	.channels = cc33xx_channels_5ghz,
+	.n_channels = ARRAY_SIZE(cc33xx_channels_5ghz),
+	.bitrates = cc33xx_rates_5ghz,
+	.n_bitrates = ARRAY_SIZE(cc33xx_rates_5ghz),
 };
 
 static void __cc33xx_op_remove_interface(struct cc33xx *wl,
@@ -1342,6 +1357,8 @@ static void cc33xx_recovery_work(struct work_struct *work)
 		__cc33xx_op_remove_interface(wl, vif, false);
 	}
 	mutex_unlock(&wl->mutex);
+
+	wlcore_sync_interrupts(wl);
 
 	cc33xx_turn_off(wl);
 	msleep(500);
@@ -5613,6 +5630,9 @@ static int cc33xx_init_ieee80211(struct cc33xx *wl)
 	}
 
 	/* Enable/Disable He based on eFuse/conf file params */
+
+    cc33xx_debug(DEBUG_BOOT,"Wifi6 disable efuse:%d, ini:%d", wl->disable_wifi6, wl->conf.mac.he_enable);
+
     if((!wl->disable_wifi6) && (wl->conf.mac.he_enable))
 	{
 		wl->hw->wiphy->iftype_ext_capab = he_iftypes_ext_capa;
@@ -5632,17 +5652,34 @@ static int cc33xx_init_ieee80211(struct cc33xx *wl)
 	 * We keep local copies of the band structs because we need to
 	 * modify them on a per-device basis.
 	 */
-	memcpy(&wl->bands[NL80211_BAND_2GHZ], &cc33xx_band_2ghz,
+    if((!wl->disable_wifi6) && (wl->conf.mac.he_enable))
+	{
+	    memcpy(&wl->bands[NL80211_BAND_2GHZ], &cc33xx_band_2ghz,
 	       sizeof(cc33xx_band_2ghz));
-	memcpy(&wl->bands[NL80211_BAND_2GHZ].ht_cap,
+	    memcpy(&wl->bands[NL80211_BAND_2GHZ].ht_cap,
 	       &wl->ht_cap[NL80211_BAND_2GHZ],
 	       sizeof(*wl->ht_cap));
 
-	memcpy(&wl->bands[NL80211_BAND_5GHZ], &cc33xx_band_5ghz,
+	    memcpy(&wl->bands[NL80211_BAND_5GHZ], &cc33xx_band_5ghz,
 	       sizeof(cc33xx_band_5ghz));
-	memcpy(&wl->bands[NL80211_BAND_5GHZ].ht_cap,
+	    memcpy(&wl->bands[NL80211_BAND_5GHZ].ht_cap,
 	       &wl->ht_cap[NL80211_BAND_5GHZ],
 	       sizeof(*wl->ht_cap));
+    }
+    else
+    {
+       	memcpy(&wl->bands[NL80211_BAND_2GHZ], &cc33xx_band_2ghz_non_he,
+	       sizeof(cc33xx_band_2ghz_non_he));
+	    memcpy(&wl->bands[NL80211_BAND_2GHZ].ht_cap,
+	       &wl->ht_cap[NL80211_BAND_2GHZ],
+	       sizeof(*wl->ht_cap));
+
+	    memcpy(&wl->bands[NL80211_BAND_5GHZ], &cc33xx_band_5ghz_non_he,
+	       sizeof(cc33xx_band_5ghz_non_he));
+	    memcpy(&wl->bands[NL80211_BAND_5GHZ].ht_cap,
+	       &wl->ht_cap[NL80211_BAND_5GHZ],
+	       sizeof(*wl->ht_cap)); 
+    }
 
 	wl->hw->wiphy->bands[NL80211_BAND_2GHZ] =
 		&wl->bands[NL80211_BAND_2GHZ];
@@ -6122,6 +6159,7 @@ static void wlcore_remove(struct platform_device *pdev)
 	device_init_wakeup(wl->dev, false);
 	cc33xx_unregister_hw(wl);
 	wlcore_disable_interrupts_nosync(wl);
+	wlcore_sync_interrupts(wl);
 	cc33xx_turn_off(wl);
 
 out:

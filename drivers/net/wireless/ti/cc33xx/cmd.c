@@ -116,6 +116,8 @@ static int __wlcore_cmd_send(struct cc33xx *wl, u16 id, void *buf,
 	case CMD_DEBUG_READ:
 	case CMD_TEST_MODE:
 	case CMD_BM_READ_DEVICE_INFO:
+    case CMD_SET_PROBE_IE:
+    case CMD_DEBUG:
 		cc33xx_debug(DEBUG_CMD,
 			     "Response len %d, allocated buffer len %d",
 			     wl->result_length, (int)res_len);
@@ -1160,6 +1162,7 @@ int wlcore_cmd_debug_failsafe(struct cc33xx *wl, u16 id, void *buf,
 				  size_t len, unsigned long valid_rets)
 {
 	struct debug_header *acx = buf;
+    size_t res_len = sizeof(struct cc33xx_cmd_header);
 	int ret;
 
 	cc33xx_debug(DEBUG_CMD, "cmd debug (%d)", id);
@@ -1172,13 +1175,19 @@ int wlcore_cmd_debug_failsafe(struct cc33xx *wl, u16 id, void *buf,
 	/* payload length, does not include any headers */
 	acx->len = cpu_to_le16(len - sizeof(*acx));
 
-	ret = wlcore_cmd_send_failsafe(wl, CMD_DEBUG, acx, len, 0,
+	ret = wlcore_cmd_send_failsafe(wl, CMD_DEBUG, acx, len, res_len,
 				       valid_rets);
 	if (ret < 0) {
 		cc33xx_warning("CONFIGURE command NOK");
 		return ret;
 	}
 
+    //check fw status code
+    if (!(acx->cmd.status == CMD_STATUS_SUCCESS)) {
+		cc33xx_error("command execute failure %d", acx->cmd.status);
+		ret = -EINVAL;
+	}
+ 
 	return ret;
 }
 
