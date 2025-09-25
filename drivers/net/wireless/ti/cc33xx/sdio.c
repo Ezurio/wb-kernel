@@ -275,8 +275,15 @@ static void cc33xx_sdio_sync_irq(struct device *child)
 
 	if (mmc_inband_polling_host(func))
 		flush_work(&glue->inband_irq_work);
-	else
-		flush_work(&host->sdio_irq_work);
+	else {
+		// Handle differences in sdio_irq_work type in vendor kernels
+		if (sizeof(host->sdio_irq_work) == sizeof(struct work_struct))
+			flush_work((struct work_struct *)&host->sdio_irq_work);
+		else if (sizeof(host->sdio_irq_work) == sizeof(struct delayed_work))
+			flush_delayed_work((struct delayed_work *)&host->sdio_irq_work);
+		else
+			dev_err(glue->dev, "Unexpected sdio_irq_work type");
+	}
 }
 
 static void cc33xx_enable_line_irq(struct device *child)
