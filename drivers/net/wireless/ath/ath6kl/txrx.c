@@ -475,7 +475,9 @@ netdev_tx_t ath6kl_data_tx(struct sk_buff *skb, struct net_device *dev)
 	}
 
 	/* allocate resource for this packet */
-	cookie = ath6kl_alloc_cookie(ar);
+	if (ar->cookie_count > 1 ) {
+		cookie = ath6kl_alloc_cookie(ar);
+	}
 
 	if (!cookie) {
 		spin_unlock_bh(&ar->lock);
