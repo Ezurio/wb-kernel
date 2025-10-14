@@ -273,6 +273,17 @@ int ath6kl_core_init(struct ath6kl *ar, enum ath6kl_htc_type htc_type)
 
 	rtnl_unlock();
 
+	switch (ar->target_type) {
+	case TARGET_TYPE_AR6003:
+		if (regulatory_load_regdb("regulatory_45.db"))
+			ath6kl_warn("Could not load regulatory database 'regulatory_45.db'");
+		break;
+	case TARGET_TYPE_AR6004:
+		if (regulatory_load_regdb("regulatory_50.db"))
+			ath6kl_warn("Could not load regulatory database 'regulatory_50.db'");
+		break;
+	}
+
 	return ret;
 
 err_rxbuf_cleanup:
