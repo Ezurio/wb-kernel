@@ -4114,7 +4114,7 @@ int ath6kl_cfg80211_init(struct ath6kl *ar)
 		NL80211_PROBE_RESP_OFFLOAD_SUPPORT_WPS2 |
 		NL80211_PROBE_RESP_OFFLOAD_SUPPORT_P2P;
 
-	ar->wiphy->regulatory_flags = REGULATORY_WIPHY_SELF_MANAGED;
+	ar->wiphy->regulatory_flags |= (REGULATORY_STRICT_REG | REGULATORY_COUNTRY_IE_IGNORE);
 
 	summit_ath6kl_wmi_init_channels(ar);
 	summit_set_vendor_commands(wiphy);
