@@ -2534,7 +2534,7 @@ static int ath6kl_wmi_sync_point(struct wmi *wmi, u8 if_idx)
 	struct wmi_sync_cmd *cmd;
 	struct wmi_data_sync_bufs data_sync_bufs[WMM_NUM_AC];
 	enum htc_endpoint_id ep_id;
-	u8 index, num_pri_streams, sync_map = 0;
+	u8 index, num_pri_streams = 0, sync_map = 0;
 	int ret = 0;
 
 	memset(data_sync_bufs, 0, sizeof(data_sync_bufs));
