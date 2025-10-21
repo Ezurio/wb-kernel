@@ -1239,6 +1239,7 @@ static int bcm_of_probe(struct bcm_device *bdev)
 	bdev->use_autobaud_mode = device_property_read_bool(bdev->dev,
 							    "brcm,requires-autobaud-mode");
 	device_property_read_u32(bdev->dev, "max-speed", &bdev->oper_speed);
+	device_property_read_u32(bdev->dev, "max-autobaud-speed", &bdev->max_autobaud_speed);
 	device_property_read_u8_array(bdev->dev, "brcm,bt-pcm-int-params",
 				      bdev->pcm_int_params, 5);
 	bdev->irq = of_irq_get_byname(bdev->dev->of_node, "host-wakeup");
@@ -1558,7 +1559,8 @@ static int bcm_serdev_probe(struct serdev_device *serdev)
 
 	data = device_get_match_data(bcmdev->dev);
 	if (data) {
-		bcmdev->max_autobaud_speed = data->max_autobaud_speed;
+		if (!bcmdev->max_autobaud_speed)
+			bcmdev->max_autobaud_speed = data->max_autobaud_speed;
 		bcmdev->no_early_set_baudrate = data->no_early_set_baudrate;
 		bcmdev->drive_rts_on_open = data->drive_rts_on_open;
 		bcmdev->no_uart_clock_set = data->no_uart_clock_set;
@@ -1590,7 +1592,7 @@ static struct bcm_device_data cyw4373a0_device_data = {
 };
 
 static struct bcm_device_data cyw55572_device_data = {
-	.max_autobaud_speed = 921600,
+	.max_autobaud_speed = 460800,
 };
 
 static const struct of_device_id bcm_bluetooth_of_match[] = {
