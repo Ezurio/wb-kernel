@@ -222,6 +222,8 @@ static int btti_uart_register_hci_device(struct btti_uart_dev *bdev)
 	hdev->send  = btti_uart_send_frame;
 	SET_HCIDEV_DEV(hdev, &serdev->dev);
 
+	set_bit(HCI_QUIRK_STRICT_DUPLICATE_FILTER, &hdev->quirks);
+
 	ret = hci_register_dev(hdev);
 	if (ret){
 		dev_err(&serdev->dev, "Can't register HCI device (%d)", ret);
