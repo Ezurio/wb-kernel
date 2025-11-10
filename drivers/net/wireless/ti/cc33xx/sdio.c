@@ -153,7 +153,7 @@ static int cc33xx_sdio_power_on(struct cc33xx_sdio_glue *glue)
 	struct mmc_card *card = func->card;
 
 	ret = pm_runtime_get_sync(&card->dev);
-	if (ret < 0) {
+	if (ret < 0 && ret != -EACCES) {
 		pm_runtime_put_noidle(&card->dev);
 		dev_err(glue->dev, "%s: failed to get_sync(%d)\n",
 			__func__, ret);
