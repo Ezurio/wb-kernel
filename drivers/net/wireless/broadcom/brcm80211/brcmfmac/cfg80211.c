@@ -5070,7 +5070,7 @@ brcmf_parse_configure_security(struct brcmf_if *ifp,
 
 	if (wpa_ie || rsn_ie) {
 		brcmf_dbg(TRACE, "WPA(2) IE is found\n");
-		if (wpa_ie) {
+		if (wpa_ie && !rsn_ie) {
 			/* WPA IE */
 			err = brcmf_configure_wpaie(ifp, wpa_ie, false);
 			if (err < 0)
