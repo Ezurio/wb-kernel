@@ -2114,7 +2114,7 @@ int brcmf_set_wsec(struct brcmf_if *ifp, const u8 *key, u16 key_len, u16 flags)
 	err = brcmf_fil_cmd_data_set(ifp, BRCMF_C_SET_WSEC_PMK,
 				     &pmk, sizeof(pmk));
 	if (err < 0)
-		bphy_err(drvr, "failed to change PSK in firmware (len=%u)\n",
+		brcmf_dbg(INFO, "failed to change PSK in firmware (len=%u)\n",
 			 key_len);
 
 	return err;
@@ -7257,7 +7257,7 @@ brcmf_cfg80211_external_auth(struct wiphy *wiphy, struct net_device *dev,
 	if (params->status == WLAN_STATUS_SUCCESS) {
 		auth_status.flags = cpu_to_le16(BRCMF_EXTAUTH_SUCCESS);
 	} else {
-		bphy_err(drvr, "External authentication failed: status=%d\n",
+		brcmf_dbg(CONN, "External authentication failed: status=%d\n",
 			 params->status);
 		auth_status.flags = cpu_to_le16(BRCMF_EXTAUTH_FAIL);
 	}
@@ -7273,7 +7273,7 @@ brcmf_cfg80211_external_auth(struct wiphy *wiphy, struct net_device *dev,
 	ret = brcmf_fil_iovar_data_set(ifp, "auth_status", &auth_status,
 				       sizeof(auth_status));
 	if (ret < 0)
-		bphy_err(drvr, "auth_status iovar failed: ret=%d\n", ret);
+		brcmf_dbg(INFO, "auth_status iovar failed: ret=%d\n", ret);
 
 	if (params->pmkid) {
 		ret = brcmf_update_pmksa(cfg,
