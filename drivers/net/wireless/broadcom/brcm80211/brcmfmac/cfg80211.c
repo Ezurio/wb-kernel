@@ -2110,7 +2110,7 @@ int brcmf_set_wsec(struct brcmf_if *ifp, const u8 *key, u16 key_len, u16 flags)
 	err = brcmf_fil_cmd_data_set(ifp, BRCMF_C_SET_WSEC_PMK,
 				     &pmk, sizeof(pmk));
 	if (err < 0)
-		bphy_err(drvr, "failed to change PSK in firmware (len=%u)\n",
+		brcmf_dbg(INFO, "failed to change PSK in firmware (len=%u)\n",
 			 key_len);
 
 	return err;
