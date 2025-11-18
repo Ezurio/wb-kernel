@@ -102,28 +102,6 @@ config SUMMIT_MWIFIEX_NX61X
 	help
 		Sona NX611 Wi-Fi module
 
-if SUMMIT_MWIFIEX_NX61X
-choice 
-	prompt "Driver debug log integration"
-	default SUMMIT_NX61X_DEBUG_DEFAULT
-
-config SUMMIT_NX61X_DEBUG_NONE
-	bool "None"
-	help
-		No debug logs integrated
-
-config SUMMIT_NX61X_DEBUG_DEFAULT
-	bool "Typical"
-	help
-		Typical level of logs integrated
-
-config SUMMIT_NX61X_DEBUG_ALL
-	bool "All"
-	help
-		All debug logs integrated
-endchoice
-endif # SUMMIT_MWIFIEX_NX61X
-
 config SUMMIT_MWIFIEX_8997
 	bool "8997 driver for manufacturing"
 	help
@@ -145,6 +123,20 @@ config SUMMIT_MWIFIEX_8997_SDIO
 		SDIO Wi-Fi module
 endif # SUMMIT_MWIFIEX_8997
 
+choice 
+	prompt "Driver debug log integration"
+	default SUMMIT_DEBUG_ALL
+
+config SUMMIT_DEBUG_MINIMAL
+	bool "Minimal"
+	help
+		Minimal level of logs integrated
+
+config SUMMIT_DEBUG_ALL
+	bool "All"
+	help
+		All debug logs integrated
+endchoice
 
 endif # SUMMIT_MWIFIEX
 
