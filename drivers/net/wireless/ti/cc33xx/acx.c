@@ -767,8 +767,8 @@ int wlcore_acx_get_tx_rate(struct cc33xx *wl, struct cc33xx_vif *wlvif,
 	//mcs & legacy handler:
 	if (acx->tx_rate >= CONF_HW_RATE_INDEX_MCS0)
 		sinfo->txrate.mcs = acx->tx_rate - CONF_HW_RATE_INDEX_MCS0;
-	else
-		sinfo->txrate.legacy = cc33xx_idx_to_rate_100Kbps[acx->tx_rate -1];
+	else if (acx->tx_rate > 0)
+		sinfo->txrate.legacy = cc33xx_idx_to_rate_100Kbps[acx->tx_rate - 1];
 
 	sinfo->txrate.nss = 1;
 	sinfo->txrate.bw = RATE_INFO_BW_20;
