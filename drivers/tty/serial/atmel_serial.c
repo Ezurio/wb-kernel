@@ -1009,9 +1009,10 @@ static void atmel_tx_dma(struct uart_port *port)
 		}
 
 		dma_async_issue_pending(chan);
-	}
 
-	if (kfifo_len(&tport->xmit_fifo) < WAKEUP_CHARS)
+		if (kfifo_len(&tport->xmit_fifo) < WAKEUP_CHARS)
+				uart_write_wakeup(port);
+	} else
 		uart_write_wakeup(port);
 }
 
