@@ -1007,9 +1007,10 @@ static void atmel_tx_dma(struct uart_port *port)
 		}
 
 		dma_async_issue_pending(chan);
-	}
 
-	if (uart_circ_chars_pending(xmit) < WAKEUP_CHARS)
+		if (uart_circ_chars_pending(xmit) < WAKEUP_CHARS)
+				uart_write_wakeup(port);
+	} else
 		uart_write_wakeup(port);
 }
 
