@@ -30,8 +30,13 @@
 #include "event.h"
 
 
-char regdomain[REGDOMAIN_LEN];
+#define DISABLE_2G 1
+#define DISABLE_5G 2
+static unsigned int disable_phy	= 0;
 
+static unsigned int ble_baudrate = 0;
+
+char regdomain[REGDOMAIN_LEN];
 #define REGULATORY_DB_NAME "regulatory_sona_ti.db"
 
 #define CC33XX_WAKEUP_TIMEOUT 					500
@@ -730,6 +735,15 @@ static void wlcore_adjust_conf(struct cc33xx *wl)
 
 	if (no_recovery != -1)
 		wl->conf.core.no_recovery = (u8) no_recovery;
+
+	// conf file has a flag that controls 5Ghz, but not 2Ghz
+	if (disable_phy & DISABLE_5G)
+		wl->conf.core.enable_5ghz = 0;
+
+	if (ble_baudrate) {
+		cc33xx_info("Overriding BLE UART baudrate to %u", ble_baudrate);
+		wl->conf.core.BleUartBaudrate = ble_baudrate;
+	}
 }
 
 void cc33xx_flush_deferred_work(struct cc33xx *wl)
@@ -5681,8 +5695,9 @@ static int cc33xx_init_ieee80211(struct cc33xx *wl)
 	       sizeof(*wl->ht_cap)); 
     }
 
-	wl->hw->wiphy->bands[NL80211_BAND_2GHZ] =
-		&wl->bands[NL80211_BAND_2GHZ];
+	if (!(disable_phy & DISABLE_2G))
+		wl->hw->wiphy->bands[NL80211_BAND_2GHZ] =
+			&wl->bands[NL80211_BAND_2GHZ];
 
 	if(!wl->disable_5g && (wl->conf.core.enable_5ghz))
 		wl->hw->wiphy->bands[NL80211_BAND_5GHZ] =
@@ -6226,6 +6241,8 @@ static inline void wlcore_set_ht_cap(struct cc33xx *wl, enum nl80211_band band,
 
 static int cc33xx_setup(struct cc33xx *wl)
 {
+	struct platform_device *pdev = wl->pdev;
+	struct wlcore_platdev_data *pdata = dev_get_platdata(&pdev->dev);
 	int ret;
 
 	BUILD_BUG_ON(CC33XX_MAX_AP_STATIONS > CC33XX_MAX_LINKS);
@@ -6233,6 +6250,14 @@ static int cc33xx_setup(struct cc33xx *wl)
 	ret = cc33xx_ini_bin_init(wl, wl->dev);
 	if (ret < 0)
 		return ret;
+
+	if (pdata->disable_phy) {
+		// If device tree parameter is set, override mod parameter value
+		disable_phy = pdata->disable_phy;
+	}
+
+	if (disable_phy)
+		cc33xx_info("Disabled PHY bands: 0x%02x", disable_phy);
 
 	if (wl->conf.core.max_rx_ampdu_len == 0) {
 		cc33xx_siso40_ht_cap_2ghz.ampdu_factor = IEEE80211_HT_MAX_AMPDU_8K;
@@ -6347,6 +6372,12 @@ MODULE_PARM_DESC(secure_boot_enable, "Enables secure boot and FW downlaod");
 
 module_param_named(fwlog, fwlog_param, charp, 0);
 MODULE_PARM_DESC(fwlog, "FW logger options: continuous, dbgpins or disable");
+
+module_param(disable_phy, uint, 0);
+MODULE_PARM_DESC(disable_phy, "Disable PHY  Bit0:2.4  Bit1:5G");
+
+module_param(ble_baudrate, uint, 0);
+MODULE_PARM_DESC(ble_baudrate, "BLE baudrate");
 
 module_param(no_recovery, int, 0600);
 MODULE_PARM_DESC(no_recovery, "Prevent HW recovery. FW will remain stuck.");

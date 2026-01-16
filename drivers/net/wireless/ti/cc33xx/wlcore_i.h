@@ -108,6 +108,7 @@ struct wlcore_platdev_data {
 
 	bool ref_clock_xtal;	/* specify whether the clock is XTAL or not */
 	bool pwr_in_suspend;
+	int  disable_phy;
 };
 
 #define MAX_NUM_KEYS 14

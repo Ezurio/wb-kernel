@@ -403,6 +403,11 @@ static u8 check_is_dfs_channel(struct cc33xx *wl,
 
 	band = wl->hw->wiphy->bands[NL80211_BAND_5GHZ];
 
+	if (!band)
+	{
+		return is_dfs;
+	}
+
 	for (i = 0; i < band->n_channels; i++)
 	{
 		if (band->channels[i].hw_value == channel)
@@ -1638,6 +1643,8 @@ int wlcore_cmd_regdomain_config_locked(struct cc33xx *wl)
 
 	for (b = NL80211_BAND_2GHZ; b <= NL80211_BAND_5GHZ; b++) {
 		band = wiphy->bands[b];
+		if (!band)
+			continue;
 		for (i = 0; i < band->n_channels; i++) {
 			struct ieee80211_channel *channel = &band->channels[i];
 			u16 ch = channel->hw_value;
