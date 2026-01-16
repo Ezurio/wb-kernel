@@ -376,6 +376,8 @@ static int wlcore_probe_of(struct device *dev, int *irq, int *wakeirq,
 
 	*wakeirq = irq_of_parse_and_map(np, 1);
 
+	of_property_read_u32(np, "disable-phy", &pdev_data->disable_phy);
+
 	return 0;
 }
 #else
