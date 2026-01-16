@@ -309,7 +309,7 @@ static int atmel_config_rs485(struct uart_port *port, struct ktermios *termios,
 
 	if (rs485conf->flags & SER_RS485_ENABLED) {
 		dev_dbg(port->dev, "Setting UART to RS485\n");
-		if (rs485conf->flags & SER_RS485_RX_DURING_TX)
+		if ((rs485conf->flags & SER_RS485_RX_DURING_TX) && !atmel_port->wakeup_on_empty)
 			atmel_port->tx_done_mask = ATMEL_US_TXRDY;
 		else
 			atmel_port->tx_done_mask = ATMEL_US_TXEMPTY;
