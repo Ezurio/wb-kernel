@@ -423,7 +423,7 @@ void ath6kl_connect_ap_mode_bss(struct ath6kl_vif *vif, u16 channel)
 
 void ath6kl_connect_ap_mode_sta(struct ath6kl_vif *vif, u16 aid, u8 *mac_addr,
 				u8 keymgmt, u8 ucipher, u8 auth,
-				u8 assoc_req_len, u8 *assoc_info, u8 apsd_info)
+				u16 assoc_req_len, u8 *assoc_info, u8 apsd_info)
 {
 	u8 *ies = NULL, *wpa_ie = NULL, *pos;
 	size_t ies_len = 0;
@@ -638,8 +638,8 @@ static void ath6kl_check_ch_switch(struct ath6kl *ar, u16 channel)
 #define PHY_MODE_HT40G	7
 void ath6kl_connect_event(struct ath6kl_vif *vif, u16 channel, u8 *bssid,
 			  u16 listen_int, u16 beacon_int,
-			  enum network_type net_type, u8 beacon_ie_len,
-			  u8 assoc_req_len, u8 assoc_resp_len,
+			  enum network_type net_type, u16 beacon_ie_len,
+			  u16 assoc_req_len, u16 assoc_resp_len,
 			  u8 *assoc_info)
 {
 	struct ath6kl *ar = vif->ar;
@@ -990,7 +990,7 @@ void ath6kl_dtimexpiry_event(struct ath6kl_vif *vif)
 }
 
 void ath6kl_disconnect_event(struct ath6kl_vif *vif, u8 reason, u8 *bssid,
-			     u8 assoc_resp_len, u8 *assoc_info,
+			     u16 assoc_resp_len, u8 *assoc_info,
 			     u16 prot_reason_status)
 {
 	struct ath6kl *ar = vif->ar;

@@ -798,8 +798,8 @@ void ath6kl_cfg80211_connect_event(struct ath6kl_vif *vif, u16 channel,
 				   u8 *bssid, u16 listen_intvl,
 				   u16 beacon_intvl,
 				   enum network_type nw_type,
-				   u8 beacon_ie_len, u8 assoc_req_len,
-				   u8 assoc_resp_len, u8 *assoc_info)
+				   u16 beacon_ie_len, u16 assoc_req_len,
+				   u16 assoc_resp_len, u8 *assoc_info)
 {
 	struct ieee80211_channel *chan;
 	struct ath6kl *ar = vif->ar;
@@ -924,7 +924,7 @@ static int ath6kl_cfg80211_disconnect(struct wiphy *wiphy,
 }
 
 void ath6kl_cfg80211_disconnect_event(struct ath6kl_vif *vif, u8 reason,
-				      u8 *bssid, u8 assoc_resp_len,
+				      u8 *bssid, u16 assoc_resp_len,
 				      u8 *assoc_info, u16 proto_reason)
 {
 	struct ath6kl *ar = vif->ar;

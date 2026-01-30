@@ -1020,14 +1020,14 @@ int ath6kl_control_tx(void *devt, struct sk_buff *skb,
 void ath6kl_connect_event(struct ath6kl_vif *vif, u16 channel,
 			  u8 *bssid, u16 listen_int,
 			  u16 beacon_int, enum network_type net_type,
-			  u8 beacon_ie_len, u8 assoc_req_len,
-			  u8 assoc_resp_len, u8 *assoc_info);
+			  u16 beacon_ie_len, u16 assoc_req_len,
+			  u16 assoc_resp_len, u8 *assoc_info);
 void ath6kl_connect_ap_mode_bss(struct ath6kl_vif *vif, u16 channel);
 void ath6kl_connect_ap_mode_sta(struct ath6kl_vif *vif, u16 aid, u8 *mac_addr,
 				u8 keymgmt, u8 ucipher, u8 auth,
-				u8 assoc_req_len, u8 *assoc_info, u8 apsd_info);
+				u16 assoc_req_len, u8 *assoc_info, u8 apsd_info);
 void ath6kl_disconnect_event(struct ath6kl_vif *vif, u8 reason,
-			     u8 *bssid, u8 assoc_resp_len,
+			     u8 *bssid, u16 assoc_resp_len,
 			     u8 *assoc_info, u16 prot_reason_status);
 void ath6kl_tkip_micerr_event(struct ath6kl_vif *vif, u8 keyid, bool ismcast);
 void ath6kl_txpwr_rx_evt(void *devt, u8 tx_pwr);

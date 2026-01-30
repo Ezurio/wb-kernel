@@ -1512,6 +1512,7 @@ enum wmi_event_id {
 
 	WMI_TXE_NOTIFY_EVENTID,
 	WMI_IN_SYNC_EVENTID_6K4 = 0x902f,
+	WMI_CONNECT_EX_EVENTID  = 0x9030,
 };
 
 struct wmi_ready_event_2 {
@@ -1560,6 +1561,38 @@ struct wmi_connect_event {
 	u8 beacon_ie_len;
 	u8 assoc_req_len;
 	u8 assoc_resp_len;
+	u8 assoc_info[];
+} __packed;
+
+/* Extended Connect Event - supports larger IE lengths */
+struct wmi_connect_ex_event {
+	union {
+		struct {
+			__le16 ch;
+			u8 bssid[ETH_ALEN];
+			__le16 listen_intvl;
+			__le16 beacon_intvl;
+			__le32 nw_type;
+		} sta;
+		struct {
+			u8 phymode;
+			u8 aid;
+			u8 mac_addr[ETH_ALEN];
+			u8 auth;
+			u8 keymgmt;
+			__le16 cipher;
+			u8 apsd_info;
+			u8 unused[3];
+		} ap_sta;
+		struct {
+			__le16 ch;
+			u8 bssid[ETH_ALEN];
+			u8 unused[8];
+		} ap_bss;
+	} u;
+	__le16 beacon_ie_len;
+	__le16 assoc_req_len;
+	__le16 assoc_resp_len;
 	u8 assoc_info[];
 } __packed;
 
