@@ -93,8 +93,12 @@ int ieee80211_aes_cmac_256(struct crypto_shash *tfm, const u8 *aad,
 		if (err)
 			return err;
 	}
-	return crypto_shash_finup(desc, zero, CMAC_TLEN_256, mic);
+	err = crypto_shash_finup(desc, zero, CMAC_TLEN_256, mic);
+	if (err)
+		return err;
 	shash_desc_zero(desc);
+
+	return 0;
 }
 
 struct crypto_shash *ieee80211_aes_cmac_key_setup(const u8 key[],
