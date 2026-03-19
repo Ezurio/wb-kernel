@@ -108,106 +108,25 @@
 		};
 	};
 
-	gpio {
-		compatible = "gpio-of-helper";
-		status = "okay";
-		pinctrl-names = "default";
-		pinctrl-0 = <&pinctrl_gpio_misc>;
+};
 
-		bt_boot_status {
-			gpio-name = "bt_boot_status";
-			gpio = <&pioA 26 GPIO_ACTIVE_HIGH>;
-			input;
-		};
+&pioA {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_gpio_misc>;
 
-		bt_boot_mode {
-			gpio-name = "bt_boot_mode";
-			gpio = <&pioA 23 GPIO_ACTIVE_HIGH>;
-			output;
-			init-high;
-		};
+	gpio-line-names =
+		"", "", "", "", "", "", "", "lte_on",		/* 0-7 */
+		"card_detect1", "lte_status", "card_detect2", "", "", "", "", "",	/* 8-15 */
+		"", "", "", "card_detect3", "ser_rs485_hd", "bt_nautorun", "ser_nrs232", "bt_boot_mode",	/* 16-23 */
+		"card_nreset", "", "bt_boot_status", "", "ser_term", "", "", "";	/* 24-31 */
+};
 
-		bt_nautorun {
-			gpio-name = "bt_nautorun";
-			gpio = <&pioA 21 GPIO_ACTIVE_HIGH>;
-			output;
-			init-low;
-		};
-
-		card_detect1 {
-			gpio-name = "card_detect1";
-			gpio = <&pioA 8 GPIO_ACTIVE_HIGH>;
-			input;
-		};
-
-		card_detect2 {
-			gpio-name = "card_detect2";
-			gpio = <&pioA 10 GPIO_ACTIVE_HIGH>;
-			input;
-		};
-
-		card_detect3 {
-			gpio-name = "card_detect3";
-			gpio = <&pioA 19 GPIO_ACTIVE_HIGH>;
-			input;
-		};
-
-		card_nreset {
-			gpio-name = "card_nreset";
-			gpio = <&pioA 24 GPIO_ACTIVE_HIGH>;
-			output;
-			init-high;
-		};
-
-		ser_rs485_hd {
-			gpio-name = "ser_rs485_hd";
-			gpio = <&pioA 20 GPIO_ACTIVE_HIGH>;
-			output;
-			init-high;
-		};
-
-		ser_nrs232 {
-			gpio-name = "ser_nrs232";
-			gpio = <&pioA 22 GPIO_ACTIVE_HIGH>;
-			output;
-			init-low;
-		};
-
-		ser_term {
-			gpio-name = "ser_term";
-			gpio = <&pioA 28 GPIO_ACTIVE_HIGH>;
-			output;
-			init-low;
-		};
-
-		lte_on {
-			gpio-name = "lte_on";
-			gpio = <&pioA 7 GPIO_ACTIVE_HIGH>;
-			output;
-			init-high;
-		};
-
-		lte_emerg_off {
-			gpio-name = "lte_emerg_off";
-			gpio = <&pioC 28 GPIO_ACTIVE_HIGH>;
-			output;
-			init-low;
-		};
-
-		lte_fast_shdn {
-			gpio-name = "lte_fast_shdn";
-			gpio = <&pioC 25 GPIO_ACTIVE_HIGH>;
-			output;
-			init-high;
-		};
-
-		lte_status {
-			gpio-name = "lte_status";
-			gpio = <&pioA 9 GPIO_ACTIVE_HIGH>;
-			input;
-		};
-
-	};
+&pioC {
+	gpio-line-names =
+		"", "", "", "", "", "", "", "",		/* 0-7 */
+		"", "", "", "", "", "", "", "",		/* 8-15 */
+		"", "", "", "", "", "", "", "",		/* 16-23 */
+		"", "lte_fast_shdn", "", "", "lte_emerg_off", "", "", "";	/* 24-31 */
 };
 
 &pinctrl {
