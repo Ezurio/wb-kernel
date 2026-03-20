@@ -36,6 +36,7 @@ struct atmel_trng {
 	struct clk *clk;
 	void __iomem *base;
 	struct hwrng rng;
+	struct device *dev;
 	bool has_half_rate;
 };
 
@@ -120,10 +121,10 @@ static int atmel_trng_probe(struct platform_device *pdev)
 		return -ENODEV;
 
 	trng->has_half_rate = data->has_half_rate;
+	trng->dev = &pdev->dev;
 	trng->rng.name = pdev->name;
 	trng->rng.read = atmel_trng_read;
 	trng->rng.quality = 921;
-	trng->rng.priv = (unsigned long)&pdev->dev;
 	platform_set_drvdata(pdev, trng);
 
 	ret = atmel_trng_init(trng);
@@ -189,7 +190,7 @@ MODULE_DEVICE_TABLE(of, atmel_trng_dt_ids);
 
 static struct platform_driver atmel_trng_driver = {
 	.probe		= atmel_trng_probe,
-	.remove_new	= atmel_trng_remove,
+	.remove		= atmel_trng_remove,
 	.driver		= {
 		.name	= "atmel-trng",
 		.pm	= pm_ptr(&atmel_trng_pm_ops),

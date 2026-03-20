@@ -487,7 +487,7 @@ struct htc_endpoint_stats {
 	/* count of credits received via another endpoint */
 	u32 cred_from_ep0;
 
-	/* count of consummed credits */
+	/* count of consumed credits */
 	u32 cred_cosumd;
 
 	/* count of credits returned */
@@ -599,7 +599,7 @@ struct htc_target {
 	/* protects free_ctrl_txbuf and free_ctrl_rxbuf */
 	spinlock_t htc_lock;
 
-	/* FIXME: does this protext rx_bufq and endpoint structures or what? */
+	/* FIXME: does this protect rx_bufq and endpoint structures or what? */
 	spinlock_t rx_lock;
 
 	/* protects endpoint->txq */
@@ -627,7 +627,7 @@ struct htc_target {
 
 	int chk_irq_status_cnt;
 
-	/* counts the number of Tx without bundling continously per AC */
+	/* counts the number of Tx without bundling continuously per AC */
 	u32 ac_tx_count[WMM_NUM_AC];
 
 	struct {

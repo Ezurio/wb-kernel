@@ -1106,7 +1106,7 @@ static SIMPLE_DEV_PM_OPS(atmel_tdes_pm_ops, atmel_tdes_suspend,
 
 static struct platform_driver atmel_tdes_driver = {
 	.probe		= atmel_tdes_probe,
-	.remove_new	= atmel_tdes_remove,
+	.remove		= atmel_tdes_remove,
 	.driver		= {
 		.name	= "atmel_tdes",
 		.of_match_table = atmel_tdes_dt_ids,

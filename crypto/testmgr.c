@@ -23,7 +23,7 @@
 #include <linux/fips.h>
 #include <linux/module.h>
 #include <linux/once.h>
-#include <linux/random.h>
+#include <linux/prandom.h>
 #include <linux/scatterlist.h>
 #include <linux/slab.h>
 #include <linux/string.h>
@@ -33,42 +33,32 @@
 #include <crypto/akcipher.h>
 #include <crypto/kpp.h>
 #include <crypto/acompress.h>
+#include <crypto/sig.h>
 #include <crypto/internal/cipher.h>
 #include <crypto/internal/simd.h>
 
 #include "internal.h"
 
-MODULE_IMPORT_NS(CRYPTO_INTERNAL);
+MODULE_IMPORT_NS("CRYPTO_INTERNAL");
 
 static bool notests;
 module_param(notests, bool, 0644);
-MODULE_PARM_DESC(notests, "disable crypto self-tests");
+MODULE_PARM_DESC(notests, "disable all crypto self-tests");
 
-////////Added for Kernel Testing//////////////
-/* FIPS 140-2 testing parameter */
-static char *fips_tinker = NULL;
-module_param(fips_tinker, charp, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
-MODULE_PARM_DESC(fips_tinker, "FIPS testing: select cipher implementation for tinkering");
-
-static int fips_prevent_panic = 0;
-module_param(fips_prevent_panic, int, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
-MODULE_PARM_DESC(fips_prevent_panic, "FIPS testing: prevent panic upon failing self test");
-////////Added for Kernel Testing//////////////
-
-static bool panic_on_fail;
-module_param(panic_on_fail, bool, 0444);
-
-#ifdef CONFIG_CRYPTO_MANAGER_EXTRA_TESTS
-static bool noextratests;
-module_param(noextratests, bool, 0644);
-MODULE_PARM_DESC(noextratests, "disable expensive crypto self-tests");
+#ifdef CONFIG_CRYPTO_SELFTESTS_FULL
+static bool noslowtests;
+module_param(noslowtests, bool, 0644);
+MODULE_PARM_DESC(noslowtests, "disable slow crypto self-tests");
 
 static unsigned int fuzz_iterations = 100;
 module_param(fuzz_iterations, uint, 0644);
 MODULE_PARM_DESC(fuzz_iterations, "number of fuzz test iterations");
+#else
+#define noslowtests 1
+#define fuzz_iterations 0
 #endif
 
-#ifdef CONFIG_CRYPTO_MANAGER_DISABLE_TESTS
+#ifndef CONFIG_CRYPTO_SELFTESTS
 
 /* a perfect nop */
 int alg_test(const char *driver, const char *alg, u32 type, u32 mask)
@@ -142,6 +132,11 @@ struct akcipher_test_suite {
 	unsigned int count;
 };
 
+struct sig_test_suite {
+	const struct sig_testvec *vecs;
+	unsigned int count;
+};
+
 struct kpp_test_suite {
 	const struct kpp_testvec *vecs;
 	unsigned int count;
@@ -162,6 +157,7 @@ struct alg_test_desc {
 		struct cprng_test_suite cprng;
 		struct drbg_test_suite drbg;
 		struct akcipher_test_suite akcipher;
+		struct sig_test_suite sig;
 		struct kpp_test_suite kpp;
 	} suite;
 };
@@ -328,10 +324,9 @@ struct testvec_config {
 
 /*
  * The following are the lists of testvec_configs to test for each algorithm
- * type when the basic crypto self-tests are enabled, i.e. when
- * CONFIG_CRYPTO_MANAGER_DISABLE_TESTS is unset.  They aim to provide good test
- * coverage, while keeping the test time much shorter than the full fuzz tests
- * so that the basic tests can be enabled in a wider range of circumstances.
+ * type when the "fast" crypto self-tests are enabled.  They aim to provide good
+ * test coverage, while keeping the test time much shorter than the "full" tests
+ * so that the "fast" tests can be enabled in a wider range of circumstances.
  */
 
 /* Configs for skciphers and aeads */
@@ -880,8 +875,6 @@ static int prepare_keybuf(const u8 *key, unsigned int ksize,
 	err;								\
 })
 
-#ifdef CONFIG_CRYPTO_MANAGER_EXTRA_TESTS
-
 /*
  * The fuzz tests use prandom instead of the normal Linux RNG since they don't
  * need cryptographically secure random numbers.  This greatly improves the
@@ -1195,14 +1188,18 @@ static void generate_random_testvec_config(struct rnd_state *rng,
 
 static void crypto_disable_simd_for_test(void)
 {
+#ifdef CONFIG_CRYPTO_SELFTESTS_FULL
 	migrate_disable();
 	__this_cpu_write(crypto_simd_disabled_for_test, true);
+#endif
 }
 
 static void crypto_reenable_simd_for_test(void)
 {
+#ifdef CONFIG_CRYPTO_SELFTESTS_FULL
 	__this_cpu_write(crypto_simd_disabled_for_test, false);
 	migrate_enable();
+#endif
 }
 
 /*
@@ -1246,15 +1243,6 @@ too_long:
 	       algname);
 	return -ENAMETOOLONG;
 }
-#else /* !CONFIG_CRYPTO_MANAGER_EXTRA_TESTS */
-static void crypto_disable_simd_for_test(void)
-{
-}
-
-static void crypto_reenable_simd_for_test(void)
-{
-}
-#endif /* !CONFIG_CRYPTO_MANAGER_EXTRA_TESTS */
 
 static int build_hash_sglist(struct test_sglist *tsgl,
 			     const struct hash_testvec *vec,
@@ -1446,16 +1434,6 @@ static int test_shash_vec_cfg(const struct hash_testvec *vec,
 	if (err)
 		return err;
 result_ready:
-	//////////////////////Added for Kernel Testing////////////////////
-	if (fips_tinker &&
-	    !strncmp(fips_tinker, tfm->base.__crt_alg->cra_driver_name,
-		     strlen(tfm->base.__crt_alg->cra_driver_name))) {
-
-		result[0] = (result[0] + 1) & 0xff;
-		printk("Altering input for hash %s\n", fips_tinker);
-	}
-
-	//////////////////////Added for Kernel Testing///////////////////
 	return check_hash_result("shash", result, digestsize, vec, vec_name,
 				 driver, cfg);
 }
@@ -1657,16 +1635,6 @@ static int test_ahash_vec_cfg(const struct hash_testvec *vec,
 	}
 
 result_ready:
-	//////////////////////Added for Kernel Testing////////////////////
-	if (fips_tinker &&
-	    !strncmp(fips_tinker, tfm->base.__crt_alg->cra_driver_name,
-		     strlen(tfm->base.__crt_alg->cra_driver_name))) {
-
-		result[0] = (result[0] + 1) & 0xff;
-		printk("Altering input for hash %s\n", fips_tinker);
-	}
-	//////////////////////Added for Kernel Testing////////////////////
-
 	return check_hash_result("ahash", result, digestsize, vec, vec_name,
 				 driver, cfg);
 }
@@ -1715,8 +1683,7 @@ static int test_hash_vec(const struct hash_testvec *vec, unsigned int vec_num,
 			return err;
 	}
 
-#ifdef CONFIG_CRYPTO_MANAGER_EXTRA_TESTS
-	if (!noextratests) {
+	if (!noslowtests) {
 		struct rnd_state rng;
 		struct testvec_config cfg;
 		char cfgname[TESTVEC_CONFIG_NAMELEN];
@@ -1733,17 +1700,15 @@ static int test_hash_vec(const struct hash_testvec *vec, unsigned int vec_num,
 			cond_resched();
 		}
 	}
-#endif
 	return 0;
 }
 
-#ifdef CONFIG_CRYPTO_MANAGER_EXTRA_TESTS
 /*
  * Generate a hash test vector from the given implementation.
  * Assumes the buffers in 'vec' were already allocated.
  */
 static void generate_random_hash_testvec(struct rnd_state *rng,
-					 struct shash_desc *desc,
+					 struct ahash_request *req,
 					 struct hash_testvec *vec,
 					 unsigned int maxkeysize,
 					 unsigned int maxdatasize,
@@ -1765,16 +1730,17 @@ static void generate_random_hash_testvec(struct rnd_state *rng,
 			vec->ksize = prandom_u32_inclusive(rng, 1, maxkeysize);
 		generate_random_bytes(rng, (u8 *)vec->key, vec->ksize);
 
-		vec->setkey_error = crypto_shash_setkey(desc->tfm, vec->key,
-							vec->ksize);
+		vec->setkey_error = crypto_ahash_setkey(
+			crypto_ahash_reqtfm(req), vec->key, vec->ksize);
 		/* If the key couldn't be set, no need to continue to digest. */
 		if (vec->setkey_error)
 			goto done;
 	}
 
 	/* Digest */
-	vec->digest_error = crypto_shash_digest(desc, vec->plaintext,
-						vec->psize, (u8 *)vec->digest);
+	vec->digest_error = crypto_hash_digest(
+		crypto_ahash_reqtfm(req), vec->plaintext,
+		vec->psize, (u8 *)vec->digest);
 done:
 	snprintf(name, max_namelen, "\"random: psize=%u ksize=%u\"",
 		 vec->psize, vec->ksize);
@@ -1799,8 +1765,8 @@ static int test_hash_vs_generic_impl(const char *generic_driver,
 	const char *driver = crypto_ahash_driver_name(tfm);
 	struct rnd_state rng;
 	char _generic_driver[CRYPTO_MAX_ALG_NAME];
-	struct crypto_shash *generic_tfm = NULL;
-	struct shash_desc *generic_desc = NULL;
+	struct ahash_request *generic_req = NULL;
+	struct crypto_ahash *generic_tfm = NULL;
 	unsigned int i;
 	struct hash_testvec vec = { 0 };
 	char vec_name[64];
@@ -1808,7 +1774,7 @@ static int test_hash_vs_generic_impl(const char *generic_driver,
 	char cfgname[TESTVEC_CONFIG_NAMELEN];
 	int err;
 
-	if (noextratests)
+	if (noslowtests)
 		return 0;
 
 	init_rnd_state(&rng);
@@ -1823,7 +1789,7 @@ static int test_hash_vs_generic_impl(const char *generic_driver,
 	if (strcmp(generic_driver, driver) == 0) /* Already the generic impl? */
 		return 0;
 
-	generic_tfm = crypto_alloc_shash(generic_driver, 0, 0);
+	generic_tfm = crypto_alloc_ahash(generic_driver, 0, 0);
 	if (IS_ERR(generic_tfm)) {
 		err = PTR_ERR(generic_tfm);
 		if (err == -ENOENT) {
@@ -1842,27 +1808,25 @@ static int test_hash_vs_generic_impl(const char *generic_driver,
 		goto out;
 	}
 
-	generic_desc = kzalloc(sizeof(*desc) +
-			       crypto_shash_descsize(generic_tfm), GFP_KERNEL);
-	if (!generic_desc) {
+	generic_req = ahash_request_alloc(generic_tfm, GFP_KERNEL);
+	if (!generic_req) {
 		err = -ENOMEM;
 		goto out;
 	}
-	generic_desc->tfm = generic_tfm;
 
 	/* Check the algorithm properties for consistency. */
 
-	if (digestsize != crypto_shash_digestsize(generic_tfm)) {
+	if (digestsize != crypto_ahash_digestsize(generic_tfm)) {
 		pr_err("alg: hash: digestsize for %s (%u) doesn't match generic impl (%u)\n",
 		       driver, digestsize,
-		       crypto_shash_digestsize(generic_tfm));
+		       crypto_ahash_digestsize(generic_tfm));
 		err = -EINVAL;
 		goto out;
 	}
 
-	if (blocksize != crypto_shash_blocksize(generic_tfm)) {
+	if (blocksize != crypto_ahash_blocksize(generic_tfm)) {
 		pr_err("alg: hash: blocksize for %s (%u) doesn't match generic impl (%u)\n",
-		       driver, blocksize, crypto_shash_blocksize(generic_tfm));
+		       driver, blocksize, crypto_ahash_blocksize(generic_tfm));
 		err = -EINVAL;
 		goto out;
 	}
@@ -1881,7 +1845,7 @@ static int test_hash_vs_generic_impl(const char *generic_driver,
 	}
 
 	for (i = 0; i < fuzz_iterations * 8; i++) {
-		generate_random_hash_testvec(&rng, generic_desc, &vec,
+		generate_random_hash_testvec(&rng, generic_req, &vec,
 					     maxkeysize, maxdatasize,
 					     vec_name, sizeof(vec_name));
 		generate_random_testvec_config(&rng, cfg, cfgname,
@@ -1899,21 +1863,10 @@ out:
 	kfree(vec.key);
 	kfree(vec.plaintext);
 	kfree(vec.digest);
-	crypto_free_shash(generic_tfm);
-	kfree_sensitive(generic_desc);
+	ahash_request_free(generic_req);
+	crypto_free_ahash(generic_tfm);
 	return err;
 }
-#else /* !CONFIG_CRYPTO_MANAGER_EXTRA_TESTS */
-static int test_hash_vs_generic_impl(const char *generic_driver,
-				     unsigned int maxkeysize,
-				     struct ahash_request *req,
-				     struct shash_desc *desc,
-				     struct test_sglist *tsgl,
-				     u8 *hashstate)
-{
-	return 0;
-}
-#endif /* !CONFIG_CRYPTO_MANAGER_EXTRA_TESTS */
 
 static int alloc_shash(const char *driver, u32 type, u32 mask,
 		       struct crypto_shash **tfm_ret,
@@ -1924,7 +1877,7 @@ static int alloc_shash(const char *driver, u32 type, u32 mask,
 
 	tfm = crypto_alloc_shash(driver, type, mask);
 	if (IS_ERR(tfm)) {
-		if (PTR_ERR(tfm) == -ENOENT) {
+		if (PTR_ERR(tfm) == -ENOENT || PTR_ERR(tfm) == -EEXIST) {
 			/*
 			 * This algorithm is only available through the ahash
 			 * API, not the shash API, so skip the shash tests.
@@ -2095,8 +2048,6 @@ static int test_aead_vec_cfg(int enc, const struct aead_testvec *vec,
 	const char *driver = crypto_aead_driver_name(tfm);
 	const u32 req_flags = CRYPTO_TFM_REQ_MAY_BACKLOG | cfg->req_flags;
 	const char *op = enc ? "encryption" : "decryption";
-	char *testbuf = NULL;
-	const char *expected_ptr = enc ? vec->ctext : vec->ptext;
 	DECLARE_CRYPTO_WAIT(wait);
 	u8 _iv[3 * (MAX_ALGAPI_ALIGNMASK + 1) + MAX_IVLEN];
 	u8 *iv = PTR_ALIGN(&_iv[0], 2 * (MAX_ALGAPI_ALIGNMASK + 1)) +
@@ -2249,32 +2200,11 @@ static int test_aead_vec_cfg(int enc, const struct aead_testvec *vec,
 	if (err) /* Expectedly failed. */
 		return 0;
 
-	////////////////////////Added for Kernel testing///////////////////////////
-	if ((enc ? vec->clen : vec->plen) && fips_tinker &&
-	    !strncmp(fips_tinker, tfm->base.__crt_alg->cra_driver_name,
-		     strlen(tfm->base.__crt_alg->cra_driver_name))) {
-
-		testbuf = kmalloc(enc ? vec->clen : vec->plen, GFP_KERNEL);
-		if (!testbuf)
-			return -ENOMEM;
-		memcpy(testbuf,
-		       enc ? vec->ctext : vec->ptext,
-		       enc ? vec->clen : vec->plen);
-		testbuf[0] = (testbuf[0] + 1) & 0xff;
-		expected_ptr = testbuf;
-
-		printk("Altering expected data for aead cipher %s\n",
-		       fips_tinker);
-	}
-	////////////////////////Added for Kernel testing///////////////////////////
-
 	/* Check for the correct output (ciphertext or plaintext) */
-	err = verify_correct_output(&tsgls->dst, expected_ptr,
+	err = verify_correct_output(&tsgls->dst, enc ? vec->ctext : vec->ptext,
 				    enc ? vec->clen : vec->plen,
 				    vec->alen,
 				    enc || cfg->inplace_mode == OUT_OF_PLACE);
-	if (testbuf)
-		kfree(testbuf);
 	if (err == -EOVERFLOW) {
 		pr_err("alg: aead: %s %s overran dst buffer on test vector %s, cfg=\"%s\"\n",
 		       driver, op, vec_name, cfg->name);
@@ -2310,8 +2240,7 @@ static int test_aead_vec(int enc, const struct aead_testvec *vec,
 			return err;
 	}
 
-#ifdef CONFIG_CRYPTO_MANAGER_EXTRA_TESTS
-	if (!noextratests) {
+	if (!noslowtests) {
 		struct rnd_state rng;
 		struct testvec_config cfg;
 		char cfgname[TESTVEC_CONFIG_NAMELEN];
@@ -2328,13 +2257,10 @@ static int test_aead_vec(int enc, const struct aead_testvec *vec,
 			cond_resched();
 		}
 	}
-#endif
 	return 0;
 }
 
-#ifdef CONFIG_CRYPTO_MANAGER_EXTRA_TESTS
-
-struct aead_extra_tests_ctx {
+struct aead_slow_tests_ctx {
 	struct rnd_state rng;
 	struct aead_request *req;
 	struct crypto_aead *tfm;
@@ -2509,8 +2435,7 @@ static void generate_random_aead_testvec(struct rnd_state *rng,
 		 vec->alen, vec->plen, authsize, vec->klen, vec->novrfy);
 }
 
-static void try_to_generate_inauthentic_testvec(
-					struct aead_extra_tests_ctx *ctx)
+static void try_to_generate_inauthentic_testvec(struct aead_slow_tests_ctx *ctx)
 {
 	int i;
 
@@ -2529,7 +2454,7 @@ static void try_to_generate_inauthentic_testvec(
  * Generate inauthentic test vectors (i.e. ciphertext, AAD pairs that aren't the
  * result of an encryption with the key) and verify that decryption fails.
  */
-static int test_aead_inauthentic_inputs(struct aead_extra_tests_ctx *ctx)
+static int test_aead_inauthentic_inputs(struct aead_slow_tests_ctx *ctx)
 {
 	unsigned int i;
 	int err;
@@ -2564,7 +2489,7 @@ static int test_aead_inauthentic_inputs(struct aead_extra_tests_ctx *ctx)
  * Test the AEAD algorithm against the corresponding generic implementation, if
  * one is available.
  */
-static int test_aead_vs_generic_impl(struct aead_extra_tests_ctx *ctx)
+static int test_aead_vs_generic_impl(struct aead_slow_tests_ctx *ctx)
 {
 	struct crypto_aead *tfm = ctx->tfm;
 	const char *algname = crypto_aead_alg(tfm)->base.cra_name;
@@ -2668,15 +2593,15 @@ out:
 	return err;
 }
 
-static int test_aead_extra(const struct alg_test_desc *test_desc,
-			   struct aead_request *req,
-			   struct cipher_test_sglists *tsgls)
+static int test_aead_slow(const struct alg_test_desc *test_desc,
+			  struct aead_request *req,
+			  struct cipher_test_sglists *tsgls)
 {
-	struct aead_extra_tests_ctx *ctx;
+	struct aead_slow_tests_ctx *ctx;
 	unsigned int i;
 	int err;
 
-	if (noextratests)
+	if (noslowtests)
 		return 0;
 
 	ctx = kzalloc(sizeof(*ctx), GFP_KERNEL);
@@ -2718,14 +2643,6 @@ out:
 	kfree(ctx);
 	return err;
 }
-#else /* !CONFIG_CRYPTO_MANAGER_EXTRA_TESTS */
-static int test_aead_extra(const struct alg_test_desc *test_desc,
-			   struct aead_request *req,
-			   struct cipher_test_sglists *tsgls)
-{
-	return 0;
-}
-#endif /* !CONFIG_CRYPTO_MANAGER_EXTRA_TESTS */
 
 static int test_aead(int enc, const struct aead_test_suite *suite,
 		     struct aead_request *req,
@@ -2791,7 +2708,7 @@ static int alg_test_aead(const struct alg_test_desc *desc, const char *driver,
 	if (err)
 		goto out;
 
-	err = test_aead_extra(desc, req, tsgls);
+	err = test_aead_slow(desc, req, tsgls);
 out:
 	free_cipher_test_sglists(tsgls);
 	aead_request_free(req);
@@ -2836,18 +2753,6 @@ static int test_cipher(struct crypto_cipher *tfm, int enc,
 
 		data = xbuf[0];
 		memcpy(data, input, template[i].len);
-		///////////Addition for Kernel Testing///////////
-		if (fips_tinker &&
-		    !strncmp(fips_tinker, tfm->base.__crt_alg->cra_driver_name,
-			     strlen(tfm->base.__crt_alg->cra_driver_name))) {
-			u8 *buf = (u8 *)data;
-
-			if (template[i].len)
-				buf[0] = (buf[0] + 1) & 0xff;
-			printk("Altering input for raw cipher %s\n",
-			       fips_tinker);
-		}
-		///////////Addition for Kernel Testing///////////
 
 		crypto_cipher_clear_flags(tfm, ~0);
 		if (template[i].wk)
@@ -2910,8 +2815,6 @@ static int test_skcipher_vec_cfg(int enc, const struct cipher_testvec *vec,
 	const char *driver = crypto_skcipher_driver_name(tfm);
 	const u32 req_flags = CRYPTO_TFM_REQ_MAY_BACKLOG | cfg->req_flags;
 	const char *op = enc ? "encryption" : "decryption";
-	char *testbuf = NULL;
-	const char *expected_ptr = enc ? vec->ctext : vec->ptext;
 	DECLARE_CRYPTO_WAIT(wait);
 	u8 _iv[3 * (MAX_ALGAPI_ALIGNMASK + 1) + MAX_IVLEN];
 	u8 *iv = PTR_ALIGN(&_iv[0], 2 * (MAX_ALGAPI_ALIGNMASK + 1)) +
@@ -2946,18 +2849,11 @@ static int test_skcipher_vec_cfg(int enc, const struct cipher_testvec *vec,
 	if (ivsize) {
 		if (WARN_ON(ivsize > MAX_IVLEN))
 			return -EINVAL;
-		if (vec->generates_iv && !enc)
-			memcpy(iv, vec->iv_out, ivsize);
-		else if (vec->iv)
+		if (vec->iv)
 			memcpy(iv, vec->iv, ivsize);
 		else
 			memset(iv, 0, ivsize);
 	} else {
-		if (vec->generates_iv) {
-			pr_err("alg: skcipher: %s has ivsize=0 but test vector %s generates IV!\n",
-			       driver, vec_name);
-			return -EINVAL;
-		}
 		iv = NULL;
 	}
 
@@ -3039,28 +2935,9 @@ static int test_skcipher_vec_cfg(int enc, const struct cipher_testvec *vec,
 		return -EINVAL;
 	}
 
-	////////////////////////Added for Kernel testing///////////////////////////
-	if (vec->len && fips_tinker &&
-	    !strncmp(fips_tinker, tfm->base.__crt_alg->cra_driver_name,
-		     strlen(tfm->base.__crt_alg->cra_driver_name))) {
-
-		testbuf = kmalloc(vec->len, GFP_KERNEL);
-		if (!testbuf)
-			return -ENOMEM;
-		memcpy(testbuf, enc ? vec->ctext : vec->ptext, vec->len);
-		testbuf[0] = (testbuf[0] + 1) & 0xff;
-		expected_ptr = testbuf;
-
-		printk("Altering expected data for skcipher cipher %s\n",
-		       fips_tinker);
-	}
-	////////////////////////Added for Kernel testing///////////////////////////
-
 	/* Check for the correct output (ciphertext or plaintext) */
-	err = verify_correct_output(&tsgls->dst, expected_ptr,
+	err = verify_correct_output(&tsgls->dst, enc ? vec->ctext : vec->ptext,
 				    vec->len, 0, true);
-	if (testbuf)
-		kfree(testbuf);
 	if (err == -EOVERFLOW) {
 		pr_err("alg: skcipher: %s %s overran dst buffer on test vector %s, cfg=\"%s\"\n",
 		       driver, op, vec_name, cfg->name);
@@ -3105,8 +2982,7 @@ static int test_skcipher_vec(int enc, const struct cipher_testvec *vec,
 			return err;
 	}
 
-#ifdef CONFIG_CRYPTO_MANAGER_EXTRA_TESTS
-	if (!noextratests) {
+	if (!noslowtests) {
 		struct rnd_state rng;
 		struct testvec_config cfg;
 		char cfgname[TESTVEC_CONFIG_NAMELEN];
@@ -3123,11 +2999,9 @@ static int test_skcipher_vec(int enc, const struct cipher_testvec *vec,
 			cond_resched();
 		}
 	}
-#endif
 	return 0;
 }
 
-#ifdef CONFIG_CRYPTO_MANAGER_EXTRA_TESTS
 /*
  * Generate a symmetric cipher test vector from the given implementation.
  * Assumes the buffers in 'vec' were already allocated.
@@ -3210,11 +3084,7 @@ static int test_skcipher_vs_generic_impl(const char *generic_driver,
 	char cfgname[TESTVEC_CONFIG_NAMELEN];
 	int err;
 
-	if (noextratests)
-		return 0;
-
-	/* Keywrap isn't supported here yet as it handles its IV differently. */
-	if (strncmp(algname, "kw(", 3) == 0)
+	if (noslowtests)
 		return 0;
 
 	init_rnd_state(&rng);
@@ -3330,14 +3200,6 @@ out:
 	skcipher_request_free(generic_req);
 	return err;
 }
-#else /* !CONFIG_CRYPTO_MANAGER_EXTRA_TESTS */
-static int test_skcipher_vs_generic_impl(const char *generic_driver,
-					 struct skcipher_request *req,
-					 struct cipher_test_sglists *tsgls)
-{
-	return 0;
-}
-#endif /* !CONFIG_CRYPTO_MANAGER_EXTRA_TESTS */
 
 static int test_skcipher(int enc, const struct cipher_test_suite *suite,
 			 struct skcipher_request *req,
@@ -3409,112 +3271,6 @@ out:
 	skcipher_request_free(req);
 	crypto_free_skcipher(tfm);
 	return err;
-}
-
-static int test_comp(struct crypto_comp *tfm,
-		     const struct comp_testvec *ctemplate,
-		     const struct comp_testvec *dtemplate,
-		     int ctcount, int dtcount)
-{
-	const char *algo = crypto_tfm_alg_driver_name(crypto_comp_tfm(tfm));
-	char *output, *decomp_output;
-	unsigned int i;
-	int ret;
-
-	output = kmalloc(COMP_BUF_SIZE, GFP_KERNEL);
-	if (!output)
-		return -ENOMEM;
-
-	decomp_output = kmalloc(COMP_BUF_SIZE, GFP_KERNEL);
-	if (!decomp_output) {
-		kfree(output);
-		return -ENOMEM;
-	}
-
-	for (i = 0; i < ctcount; i++) {
-		int ilen;
-		unsigned int dlen = COMP_BUF_SIZE;
-
-		memset(output, 0, COMP_BUF_SIZE);
-		memset(decomp_output, 0, COMP_BUF_SIZE);
-
-		ilen = ctemplate[i].inlen;
-		ret = crypto_comp_compress(tfm, ctemplate[i].input,
-					   ilen, output, &dlen);
-		if (ret) {
-			printk(KERN_ERR "alg: comp: compression failed "
-			       "on test %d for %s: ret=%d\n", i + 1, algo,
-			       -ret);
-			goto out;
-		}
-
-		ilen = dlen;
-		dlen = COMP_BUF_SIZE;
-		ret = crypto_comp_decompress(tfm, output,
-					     ilen, decomp_output, &dlen);
-		if (ret) {
-			pr_err("alg: comp: compression failed: decompress: on test %d for %s failed: ret=%d\n",
-			       i + 1, algo, -ret);
-			goto out;
-		}
-
-		if (dlen != ctemplate[i].inlen) {
-			printk(KERN_ERR "alg: comp: Compression test %d "
-			       "failed for %s: output len = %d\n", i + 1, algo,
-			       dlen);
-			ret = -EINVAL;
-			goto out;
-		}
-
-		if (memcmp(decomp_output, ctemplate[i].input,
-			   ctemplate[i].inlen)) {
-			pr_err("alg: comp: compression failed: output differs: on test %d for %s\n",
-			       i + 1, algo);
-			hexdump(decomp_output, dlen);
-			ret = -EINVAL;
-			goto out;
-		}
-	}
-
-	for (i = 0; i < dtcount; i++) {
-		int ilen;
-		unsigned int dlen = COMP_BUF_SIZE;
-
-		memset(decomp_output, 0, COMP_BUF_SIZE);
-
-		ilen = dtemplate[i].inlen;
-		ret = crypto_comp_decompress(tfm, dtemplate[i].input,
-					     ilen, decomp_output, &dlen);
-		if (ret) {
-			printk(KERN_ERR "alg: comp: decompression failed "
-			       "on test %d for %s: ret=%d\n", i + 1, algo,
-			       -ret);
-			goto out;
-		}
-
-		if (dlen != dtemplate[i].outlen) {
-			printk(KERN_ERR "alg: comp: Decompression test %d "
-			       "failed for %s: output len = %d\n", i + 1, algo,
-			       dlen);
-			ret = -EINVAL;
-			goto out;
-		}
-
-		if (memcmp(decomp_output, dtemplate[i].output, dlen)) {
-			printk(KERN_ERR "alg: comp: Decompression test %d "
-			       "failed for %s\n", i + 1, algo);
-			hexdump(decomp_output, dlen);
-			ret = -EINVAL;
-			goto out;
-		}
-	}
-
-	ret = 0;
-
-out:
-	kfree(decomp_output);
-	kfree(output);
-	return ret;
 }
 
 static int test_acomp(struct crypto_acomp *tfm,
@@ -3613,21 +3369,6 @@ static int test_acomp(struct crypto_acomp *tfm,
 			goto out;
 		}
 
-#ifdef CONFIG_CRYPTO_MANAGER_EXTRA_TESTS
-		crypto_init_wait(&wait);
-		sg_init_one(&src, input_vec, ilen);
-		acomp_request_set_params(req, &src, NULL, ilen, 0);
-
-		ret = crypto_wait_req(crypto_acomp_compress(req), &wait);
-		if (ret) {
-			pr_err("alg: acomp: compression failed on NULL dst buffer test %d for %s: ret=%d\n",
-			       i + 1, algo, -ret);
-			kfree(input_vec);
-			acomp_request_free(req);
-			goto out;
-		}
-#endif
-
 		kfree(input_vec);
 		acomp_request_free(req);
 	}
@@ -3689,20 +3430,6 @@ static int test_acomp(struct crypto_acomp *tfm,
 			goto out;
 		}
 
-#ifdef CONFIG_CRYPTO_MANAGER_EXTRA_TESTS
-		crypto_init_wait(&wait);
-		acomp_request_set_params(req, &src, NULL, ilen, 0);
-
-		ret = crypto_wait_req(crypto_acomp_decompress(req), &wait);
-		if (ret) {
-			pr_err("alg: acomp: decompression failed on NULL dst buffer test %d for %s: ret=%d\n",
-			       i + 1, algo, -ret);
-			kfree(input_vec);
-			acomp_request_free(req);
-			goto out;
-		}
-#endif
-
 		kfree(input_vec);
 		acomp_request_free(req);
 	}
@@ -3715,7 +3442,6 @@ out:
 	return ret;
 }
 
-#if IS_ENABLED(CONFIG_CRYPTO_ANSI_CPRNG)
 static int test_cprng(struct crypto_rng *tfm,
 		      const struct cprng_testvec *template,
 		      unsigned int tcount)
@@ -3777,7 +3503,6 @@ out:
 	kfree(seed);
 	return err;
 }
-#endif
 
 static int alg_test_cipher(const struct alg_test_desc *desc,
 			   const char *driver, u32 type, u32 mask)
@@ -3806,99 +3531,25 @@ static int alg_test_cipher(const struct alg_test_desc *desc,
 static int alg_test_comp(const struct alg_test_desc *desc, const char *driver,
 			 u32 type, u32 mask)
 {
-	struct crypto_comp *comp;
 	struct crypto_acomp *acomp;
 	int err;
-	u32 algo_type = type & CRYPTO_ALG_TYPE_ACOMPRESS_MASK;
 
-	if (algo_type == CRYPTO_ALG_TYPE_ACOMPRESS) {
-		acomp = crypto_alloc_acomp(driver, type, mask);
-		if (IS_ERR(acomp)) {
-			if (PTR_ERR(acomp) == -ENOENT)
-				return 0;
-			pr_err("alg: acomp: Failed to load transform for %s: %ld\n",
-			       driver, PTR_ERR(acomp));
-			return PTR_ERR(acomp);
-		}
-		err = test_acomp(acomp, desc->suite.comp.comp.vecs,
-				 desc->suite.comp.decomp.vecs,
-				 desc->suite.comp.comp.count,
-				 desc->suite.comp.decomp.count);
-		crypto_free_acomp(acomp);
-	} else {
-		comp = crypto_alloc_comp(driver, type, mask);
-		if (IS_ERR(comp)) {
-			if (PTR_ERR(comp) == -ENOENT)
-				return 0;
-			pr_err("alg: comp: Failed to load transform for %s: %ld\n",
-			       driver, PTR_ERR(comp));
-			return PTR_ERR(comp);
-		}
-
-		err = test_comp(comp, desc->suite.comp.comp.vecs,
-				desc->suite.comp.decomp.vecs,
-				desc->suite.comp.comp.count,
-				desc->suite.comp.decomp.count);
-
-		crypto_free_comp(comp);
-	}
-	return err;
-}
-
-static int alg_test_crc32c(const struct alg_test_desc *desc,
-			   const char *driver, u32 type, u32 mask)
-{
-	struct crypto_shash *tfm;
-	__le32 val;
-	int err;
-
-	err = alg_test_hash(desc, driver, type, mask);
-	if (err)
-		return err;
-
-	tfm = crypto_alloc_shash(driver, type, mask);
-	if (IS_ERR(tfm)) {
-		if (PTR_ERR(tfm) == -ENOENT) {
-			/*
-			 * This crc32c implementation is only available through
-			 * ahash API, not the shash API, so the remaining part
-			 * of the test is not applicable to it.
-			 */
+	acomp = crypto_alloc_acomp(driver, type, mask);
+	if (IS_ERR(acomp)) {
+		if (PTR_ERR(acomp) == -ENOENT)
 			return 0;
-		}
-		printk(KERN_ERR "alg: crc32c: Failed to load transform for %s: "
-		       "%ld\n", driver, PTR_ERR(tfm));
-		return PTR_ERR(tfm);
+		pr_err("alg: acomp: Failed to load transform for %s: %ld\n",
+		       driver, PTR_ERR(acomp));
+		return PTR_ERR(acomp);
 	}
-	driver = crypto_shash_driver_name(tfm);
-
-	do {
-		SHASH_DESC_ON_STACK(shash, tfm);
-		u32 *ctx = (u32 *)shash_desc_ctx(shash);
-
-		shash->tfm = tfm;
-
-		*ctx = 420553207;
-		err = crypto_shash_final(shash, (u8 *)&val);
-		if (err) {
-			printk(KERN_ERR "alg: crc32c: Operation failed for "
-			       "%s: %d\n", driver, err);
-			break;
-		}
-
-		if (val != cpu_to_le32(~420553207)) {
-			pr_err("alg: crc32c: Test failed for %s: %u\n",
-			       driver, le32_to_cpu(val));
-			err = -EINVAL;
-		}
-	} while (0);
-
-	crypto_free_shash(tfm);
-
+	err = test_acomp(acomp, desc->suite.comp.comp.vecs,
+			 desc->suite.comp.decomp.vecs,
+			 desc->suite.comp.comp.count,
+			 desc->suite.comp.decomp.count);
+	crypto_free_acomp(acomp);
 	return err;
 }
 
-#if IS_ENABLED(CONFIG_CRYPTO_ANSI_CPRNG)
 static int alg_test_cprng(const struct alg_test_desc *desc, const char *driver,
 			  u32 type, u32 mask)
 {
@@ -3920,7 +3571,6 @@ static int alg_test_cprng(const struct alg_test_desc *desc, const char *driver,
 
 	return err;
 }
-#endif
 
 
 static int drbg_cavs_test(const struct drbg_testvec *test, int pr,
@@ -3983,14 +3633,6 @@ static int drbg_cavs_test(const struct drbg_testvec *test, int pr,
 		       "driver %s\n", driver);
 		goto outbuf;
 	}
-
-	////////Added for Kernel Testing//////////////
-        if (fips_tinker &&
-            !strncmp(fips_tinker, driver, strlen(driver))) {
-                buf[0] = (buf[0] + 1) & 0xff;
-                printk("Altering input for DRBG %s\n", fips_tinker);
-        }
-        ////////Added for Kernel Testing//////////////
 
 	ret = memcmp(test->expected, buf, test->expectedlen);
 
@@ -4080,18 +3722,6 @@ static int do_test_kpp(struct crypto_kpp *tfm, const struct kpp_testvec *vec,
 			goto free_output;
 		}
 	} else {
-		////////Added for Kernel Testing/////////////
-		if (fips_tinker &&
-		    !strncmp(fips_tinker, tfm->base.__crt_alg->cra_driver_name,
-			     strlen(tfm->base.__crt_alg->cra_driver_name))) {
-			u8 *buf = (u8 *)output_buf;
-
-			if (out_len_max)
-				buf[0] = (buf[0] + 1) & 0xff;
-			printk("Altering input for KPP %s\n", fips_tinker);
-		}
-		////////Added for Kernel Testing/////////////
-
 		/* Verify calculated public key */
 		if (memcmp(vec->expected_a_public, sg_virt(req->dst),
 			   vec->expected_a_public_size)) {
@@ -4158,7 +3788,7 @@ static int do_test_kpp(struct crypto_kpp *tfm, const struct kpp_testvec *vec,
 		shared_secret = (void *)vec->expected_ss;
 	}
 
-		/*
+	/*
 	 * verify shared secret from which the user will derive
 	 * secret key by executing whatever hash it has chosen
 	 */
@@ -4234,11 +3864,9 @@ static int test_akcipher_one(struct crypto_akcipher *tfm,
 	struct crypto_wait wait;
 	unsigned int out_len_max, out_len = 0;
 	int err = -ENOMEM;
-	struct scatterlist src, dst, src_tab[3];
-	const char *m, *c;
-	unsigned int m_size, c_size;
-	const char *op;
-	u8 *key, *ptr;
+	struct scatterlist src, dst, src_tab[2];
+	const char *c;
+	unsigned int c_size;
 
 	if (testmgr_alloc_buf(xbuf))
 		return err;
@@ -4249,117 +3877,53 @@ static int test_akcipher_one(struct crypto_akcipher *tfm,
 
 	crypto_init_wait(&wait);
 
-	key = kmalloc(vecs->key_len + sizeof(u32) * 2 + vecs->param_len,
-		      GFP_KERNEL);
-	if (!key)
-		goto free_req;
-	memcpy(key, vecs->key, vecs->key_len);
-	ptr = key + vecs->key_len;
-	ptr = test_pack_u32(ptr, vecs->algo);
-	ptr = test_pack_u32(ptr, vecs->param_len);
-	memcpy(ptr, vecs->params, vecs->param_len);
-
 	if (vecs->public_key_vec)
-		err = crypto_akcipher_set_pub_key(tfm, key, vecs->key_len);
+		err = crypto_akcipher_set_pub_key(tfm, vecs->key,
+						  vecs->key_len);
 	else
-		err = crypto_akcipher_set_priv_key(tfm, key, vecs->key_len);
+		err = crypto_akcipher_set_priv_key(tfm, vecs->key,
+						   vecs->key_len);
 	if (err)
-		goto free_key;
+		goto free_req;
 
-	/*
-	 * First run test which do not require a private key, such as
-	 * encrypt or verify.
-	 */
+	/* First run encrypt test which does not require a private key */
 	err = -ENOMEM;
 	out_len_max = crypto_akcipher_maxsize(tfm);
 	outbuf_enc = kzalloc(out_len_max, GFP_KERNEL);
 	if (!outbuf_enc)
-		goto free_key;
+		goto free_req;
 
-	if (!vecs->siggen_sigver_test) {
-		m = vecs->m;
-		m_size = vecs->m_size;
-		c = vecs->c;
-		c_size = vecs->c_size;
-		op = "encrypt";
-	} else {
-		/* Swap args so we could keep plaintext (digest)
-		 * in vecs->m, and cooked signature in vecs->c.
-		 */
-		m = vecs->c; /* signature */
-		m_size = vecs->c_size;
-		c = vecs->m; /* digest */
-		c_size = vecs->m_size;
-		op = "verify";
-	}
+	c = vecs->c;
+	c_size = vecs->c_size;
 
 	err = -E2BIG;
-	if (WARN_ON(m_size > PAGE_SIZE))
+	if (WARN_ON(vecs->m_size > PAGE_SIZE))
 		goto free_all;
-	memcpy(xbuf[0], m, m_size);
+	memcpy(xbuf[0], vecs->m, vecs->m_size);
 
-	sg_init_table(src_tab, 3);
+	sg_init_table(src_tab, 2);
 	sg_set_buf(&src_tab[0], xbuf[0], 8);
-	sg_set_buf(&src_tab[1], xbuf[0] + 8, m_size - 8);
-	if (vecs->siggen_sigver_test) {
-		if (WARN_ON(c_size > PAGE_SIZE))
-			goto free_all;
-		memcpy(xbuf[1], c, c_size);
-		sg_set_buf(&src_tab[2], xbuf[1], c_size);
-		akcipher_request_set_crypt(req, src_tab, NULL, m_size, c_size);
-	} else {
-		sg_init_one(&dst, outbuf_enc, out_len_max);
-		akcipher_request_set_crypt(req, src_tab, &dst, m_size,
-					   out_len_max);
-	}
+	sg_set_buf(&src_tab[1], xbuf[0] + 8, vecs->m_size - 8);
+	sg_init_one(&dst, outbuf_enc, out_len_max);
+	akcipher_request_set_crypt(req, src_tab, &dst, vecs->m_size,
+				   out_len_max);
 	akcipher_request_set_callback(req, CRYPTO_TFM_REQ_MAY_BACKLOG,
 				      crypto_req_done, &wait);
 
-		/////////////Added for Kernel Testing////////////////
-	           if (fips_tinker &&
-                        !strncmp(fips_tinker, tfm->base.__crt_alg->cra_driver_name,
-                                strlen(tfm->base.__crt_alg->cra_driver_name))){
-                        u8 *buf = (u8 *)xbuf[1];
-
-                        if (out_len_max)
-                                buf[0] = (buf[0] + 1) & 0xff;
-                        printk("Altering input for akcipher %s\n", fips_tinker);
-                }
-                /////////////Added for Kernel Testing////////////////////
-
-	err = crypto_wait_req(vecs->siggen_sigver_test ?
-			      /* Run asymmetric signature verification */
-			      crypto_akcipher_verify(req) :
-			      /* Run asymmetric encrypt */
-			      crypto_akcipher_encrypt(req), &wait);
+	err = crypto_wait_req(crypto_akcipher_encrypt(req), &wait);
 	if (err) {
-		pr_err("alg: akcipher: %s test failed. err %d\n", op, err);
+		pr_err("alg: akcipher: encrypt test failed. err %d\n", err);
 		goto free_all;
 	}
-	if (!vecs->siggen_sigver_test && c) {
+	if (c) {
 		if (req->dst_len != c_size) {
-			pr_err("alg: akcipher: %s test failed. Invalid output len\n",
-			       op);
+			pr_err("alg: akcipher: encrypt test failed. Invalid output len\n");
 			err = -EINVAL;
 			goto free_all;
 		}
-
-		 /////////////Added for Kernel Testing////////////////
-                if (fips_tinker &&
-                    !strncmp(fips_tinker, tfm->base.__crt_alg->cra_driver_name,
-                             strlen(tfm->base.__crt_alg->cra_driver_name))) {
-                        u8 *buf = (u8 *)outbuf_enc;
-
-                        if (out_len_max)
-                                buf[0] = (buf[0] + 1) & 0xff;
-                        printk("Altering input for akcipher %s\n", fips_tinker);
-                }
-                /////////////Added for Kernel Testing////////////////
-
 		/* verify that encrypted message is equal to expected */
 		if (memcmp(c, outbuf_enc, c_size) != 0) {
-			pr_err("alg: akcipher: %s test failed. Invalid output\n",
-			       op);
+			pr_err("alg: akcipher: encrypt test failed. Invalid output\n");
 			hexdump(outbuf_enc, c_size);
 			err = -EINVAL;
 			goto free_all;
@@ -4367,7 +3931,7 @@ static int test_akcipher_one(struct crypto_akcipher *tfm,
 	}
 
 	/*
-	 * Don't invoke (decrypt or sign) test which require a private key
+	 * Don't invoke decrypt test which requires a private key
 	 * for vectors with only a public key.
 	 */
 	if (vecs->public_key_vec) {
@@ -4380,13 +3944,12 @@ static int test_akcipher_one(struct crypto_akcipher *tfm,
 		goto free_all;
 	}
 
-	if (!vecs->siggen_sigver_test && !c) {
+	if (!c) {
 		c = outbuf_enc;
 		c_size = req->dst_len;
 	}
 
 	err = -E2BIG;
-	op = vecs->siggen_sigver_test ? "sign" : "decrypt";
 	if (WARN_ON(c_size > PAGE_SIZE))
 		goto free_all;
 	memcpy(xbuf[0], c, c_size);
@@ -4396,34 +3959,29 @@ static int test_akcipher_one(struct crypto_akcipher *tfm,
 	crypto_init_wait(&wait);
 	akcipher_request_set_crypt(req, &src, &dst, c_size, out_len_max);
 
-	err = crypto_wait_req(vecs->siggen_sigver_test ?
-			      /* Run asymmetric signature generation */
-			      crypto_akcipher_sign(req) :
-			      /* Run asymmetric decrypt */
-			      crypto_akcipher_decrypt(req), &wait);
+	err = crypto_wait_req(crypto_akcipher_decrypt(req), &wait);
 	if (err) {
-		pr_err("alg: akcipher: %s test failed. err %d\n", op, err);
+		pr_err("alg: akcipher: decrypt test failed. err %d\n", err);
 		goto free_all;
 	}
 	out_len = req->dst_len;
-	if (out_len < m_size) {
-		pr_err("alg: akcipher: %s test failed. Invalid output len %u\n",
-		       op, out_len);
+	if (out_len < vecs->m_size) {
+		pr_err("alg: akcipher: decrypt test failed. Invalid output len %u\n",
+		       out_len);
 		err = -EINVAL;
 		goto free_all;
 	}
 	/* verify that decrypted message is equal to the original msg */
-	if (memchr_inv(outbuf_dec, 0, out_len - m_size) ||
-	    memcmp(m, outbuf_dec + out_len - m_size, m_size)) {
-		pr_err("alg: akcipher: %s test failed. Invalid output\n", op);
+	if (memchr_inv(outbuf_dec, 0, out_len - vecs->m_size) ||
+	    memcmp(vecs->m, outbuf_dec + out_len - vecs->m_size,
+		   vecs->m_size)) {
+		pr_err("alg: akcipher: decrypt test failed. Invalid output\n");
 		hexdump(outbuf_dec, out_len);
 		err = -EINVAL;
 	}
 free_all:
 	kfree(outbuf_dec);
 	kfree(outbuf_enc);
-free_key:
-	kfree(key);
 free_req:
 	akcipher_request_free(req);
 free_xbuf:
@@ -4451,7 +4009,6 @@ static int test_akcipher(struct crypto_akcipher *tfm, const char *alg,
 	return 0;
 }
 
-__maybe_unused
 static int alg_test_akcipher(const struct alg_test_desc *desc,
 			     const char *driver, u32 type, u32 mask)
 {
@@ -4474,6 +4031,114 @@ static int alg_test_akcipher(const struct alg_test_desc *desc,
 	return err;
 }
 
+static int test_sig_one(struct crypto_sig *tfm, const struct sig_testvec *vecs)
+{
+	u8 *ptr, *key __free(kfree);
+	int err, sig_size;
+
+	key = kmalloc(vecs->key_len + 2 * sizeof(u32) + vecs->param_len,
+		      GFP_KERNEL);
+	if (!key)
+		return -ENOMEM;
+
+	/* ecrdsa expects additional parameters appended to the key */
+	memcpy(key, vecs->key, vecs->key_len);
+	ptr = key + vecs->key_len;
+	ptr = test_pack_u32(ptr, vecs->algo);
+	ptr = test_pack_u32(ptr, vecs->param_len);
+	memcpy(ptr, vecs->params, vecs->param_len);
+
+	if (vecs->public_key_vec)
+		err = crypto_sig_set_pubkey(tfm, key, vecs->key_len);
+	else
+		err = crypto_sig_set_privkey(tfm, key, vecs->key_len);
+	if (err)
+		return err;
+
+	/*
+	 * Run asymmetric signature verification first
+	 * (which does not require a private key)
+	 */
+	err = crypto_sig_verify(tfm, vecs->c, vecs->c_size,
+				vecs->m, vecs->m_size);
+	if (err) {
+		pr_err("alg: sig: verify test failed: err %d\n", err);
+		return err;
+	}
+
+	/*
+	 * Don't invoke sign test (which requires a private key)
+	 * for vectors with only a public key.
+	 */
+	if (vecs->public_key_vec)
+		return 0;
+
+	sig_size = crypto_sig_maxsize(tfm);
+	if (sig_size < vecs->c_size) {
+		pr_err("alg: sig: invalid maxsize %u\n", sig_size);
+		return -EINVAL;
+	}
+
+	u8 *sig __free(kfree) = kzalloc(sig_size, GFP_KERNEL);
+	if (!sig)
+		return -ENOMEM;
+
+	/* Run asymmetric signature generation */
+	err = crypto_sig_sign(tfm, vecs->m, vecs->m_size, sig, sig_size);
+	if (err < 0) {
+		pr_err("alg: sig: sign test failed: err %d\n", err);
+		return err;
+	}
+
+	/* Verify that generated signature equals cooked signature */
+	if (err != vecs->c_size ||
+	    memcmp(sig, vecs->c, vecs->c_size) ||
+	    memchr_inv(sig + vecs->c_size, 0, sig_size - vecs->c_size)) {
+		pr_err("alg: sig: sign test failed: invalid output\n");
+		hexdump(sig, sig_size);
+		return -EINVAL;
+	}
+
+	return 0;
+}
+
+static int test_sig(struct crypto_sig *tfm, const char *alg,
+		    const struct sig_testvec *vecs, unsigned int tcount)
+{
+	const char *algo = crypto_tfm_alg_driver_name(crypto_sig_tfm(tfm));
+	int ret, i;
+
+	for (i = 0; i < tcount; i++) {
+		ret = test_sig_one(tfm, vecs++);
+		if (ret) {
+			pr_err("alg: sig: test %d failed for %s: err %d\n",
+			       i + 1, algo, ret);
+			return ret;
+		}
+	}
+	return 0;
+}
+
+static int alg_test_sig(const struct alg_test_desc *desc, const char *driver,
+			u32 type, u32 mask)
+{
+	struct crypto_sig *tfm;
+	int err = 0;
+
+	tfm = crypto_alloc_sig(driver, type, mask);
+	if (IS_ERR(tfm)) {
+		pr_err("alg: sig: Failed to load tfm for %s: %ld\n",
+		       driver, PTR_ERR(tfm));
+		return PTR_ERR(tfm);
+	}
+	if (desc->suite.sig.vecs)
+		err = test_sig(tfm, desc->alg, desc->suite.sig.vecs,
+			       desc->suite.sig.count);
+
+	crypto_free_sig(tfm);
+	return err;
+}
+
 static int alg_test_null(const struct alg_test_desc *desc,
 			     const char *driver, u32 type, u32 mask)
 {
@@ -4486,69 +4151,67 @@ static int alg_test_null(const struct alg_test_desc *desc,
 /* Please keep this list sorted by algorithm name. */
 static const struct alg_test_desc alg_test_descs[] = {
 	{
-#if IS_ENABLED(CONFIG_CRYPTO_ADIANTUM)
 		.alg = "adiantum(xchacha12,aes)",
-		.generic_driver = "adiantum(xchacha12-generic,aes-generic,nhpoly1305-generic)",
+		.generic_driver = "adiantum(xchacha12-lib,aes-generic,nhpoly1305-generic)",
 		.test = alg_test_skcipher,
 		.suite = {
 			.cipher = __VECS(adiantum_xchacha12_aes_tv_template)
 		},
 	}, {
 		.alg = "adiantum(xchacha20,aes)",
-		.generic_driver = "adiantum(xchacha20-generic,aes-generic,nhpoly1305-generic)",
+		.generic_driver = "adiantum(xchacha20-lib,aes-generic,nhpoly1305-generic)",
 		.test = alg_test_skcipher,
 		.suite = {
 			.cipher = __VECS(adiantum_xchacha20_aes_tv_template)
 		},
 	}, {
-#endif
-#if IS_ENABLED(CONFIG_CRYPTO_AEGIS128)
 		.alg = "aegis128",
 		.test = alg_test_aead,
 		.suite = {
 			.aead = __VECS(aegis128_tv_template)
 		}
 	}, {
-#endif
-#if IS_ENABLED(CONFIG_CRYPTO_ANSI_CPRNG)
 		.alg = "ansi_cprng",
 		.test = alg_test_cprng,
 		.suite = {
 			.cprng = __VECS(ansi_cprng_aes_tv_template)
 		}
 	}, {
-#endif
-#if IS_ENABLED(CONFIG_CRYPTO_AUTHENC)
 		.alg = "authenc(hmac(md5),ecb(cipher_null))",
+		.generic_driver = "authenc(hmac-md5-lib,ecb-cipher_null)",
 		.test = alg_test_aead,
 		.suite = {
 			.aead = __VECS(hmac_md5_ecb_cipher_null_tv_template)
 		}
 	}, {
 		.alg = "authenc(hmac(sha1),cbc(aes))",
+		.generic_driver = "authenc(hmac-sha1-lib,cbc(aes-generic))",
 		.test = alg_test_aead,
+		.fips_allowed = 1,
 		.suite = {
 			.aead = __VECS(hmac_sha1_aes_cbc_tv_temp)
 		}
 	}, {
-#if IS_ENABLED(CONFIG_CRYPTO_DES)
 		.alg = "authenc(hmac(sha1),cbc(des))",
+		.generic_driver = "authenc(hmac-sha1-lib,cbc(des-generic))",
 		.test = alg_test_aead,
 		.suite = {
 			.aead = __VECS(hmac_sha1_des_cbc_tv_temp)
 		}
 	}, {
 		.alg = "authenc(hmac(sha1),cbc(des3_ede))",
+		.generic_driver = "authenc(hmac-sha1-lib,cbc(des3_ede-generic))",
 		.test = alg_test_aead,
 		.suite = {
 			.aead = __VECS(hmac_sha1_des3_ede_cbc_tv_temp)
 		}
 	}, {
-#endif
 		.alg = "authenc(hmac(sha1),ctr(aes))",
 		.test = alg_test_null,
+		.fips_allowed = 1,
 	}, {
 		.alg = "authenc(hmac(sha1),ecb(cipher_null))",
+		.generic_driver = "authenc(hmac-sha1-lib,ecb-cipher_null)",
 		.test = alg_test_aead,
 		.suite = {
 			.aead = __VECS(hmac_sha1_ecb_cipher_null_tv_temp)
@@ -4556,93 +4219,110 @@ static const struct alg_test_desc alg_test_descs[] = {
 	}, {
 		.alg = "authenc(hmac(sha1),rfc3686(ctr(aes)))",
 		.test = alg_test_null,
+		.fips_allowed = 1,
 	}, {
-#if IS_ENABLED(CONFIG_CRYPTO_DES)
 		.alg = "authenc(hmac(sha224),cbc(des))",
+		.generic_driver = "authenc(hmac-sha224-lib,cbc(des-generic))",
 		.test = alg_test_aead,
 		.suite = {
 			.aead = __VECS(hmac_sha224_des_cbc_tv_temp)
 		}
 	}, {
 		.alg = "authenc(hmac(sha224),cbc(des3_ede))",
+		.generic_driver = "authenc(hmac-sha224-lib,cbc(des3_ede-generic))",
 		.test = alg_test_aead,
 		.suite = {
 			.aead = __VECS(hmac_sha224_des3_ede_cbc_tv_temp)
 		}
 	}, {
-#endif
 		.alg = "authenc(hmac(sha256),cbc(aes))",
+		.generic_driver = "authenc(hmac-sha256-lib,cbc(aes-generic))",
 		.test = alg_test_aead,
 		.fips_allowed = 1,
 		.suite = {
 			.aead = __VECS(hmac_sha256_aes_cbc_tv_temp)
 		}
 	}, {
-#if IS_ENABLED(CONFIG_CRYPTO_DES)
 		.alg = "authenc(hmac(sha256),cbc(des))",
+		.generic_driver = "authenc(hmac-sha256-lib,cbc(des-generic))",
 		.test = alg_test_aead,
 		.suite = {
 			.aead = __VECS(hmac_sha256_des_cbc_tv_temp)
 		}
 	}, {
 		.alg = "authenc(hmac(sha256),cbc(des3_ede))",
+		.generic_driver = "authenc(hmac-sha256-lib,cbc(des3_ede-generic))",
 		.test = alg_test_aead,
 		.suite = {
 			.aead = __VECS(hmac_sha256_des3_ede_cbc_tv_temp)
 		}
 	}, {
-#endif
 		.alg = "authenc(hmac(sha256),ctr(aes))",
 		.test = alg_test_null,
 		.fips_allowed = 1,
+	}, {
+		.alg = "authenc(hmac(sha256),cts(cbc(aes)))",
+		.generic_driver = "authenc(hmac-sha256-lib,cts(cbc(aes-generic)))",
+		.test = alg_test_aead,
+		.suite = {
+			.aead = __VECS(krb5_test_aes128_cts_hmac_sha256_128)
+		}
 	}, {
 		.alg = "authenc(hmac(sha256),rfc3686(ctr(aes)))",
 		.test = alg_test_null,
 		.fips_allowed = 1,
 	}, {
-#if IS_ENABLED(CONFIG_CRYPTO_DES)
 		.alg = "authenc(hmac(sha384),cbc(des))",
+		.generic_driver = "authenc(hmac-sha384-lib,cbc(des-generic))",
 		.test = alg_test_aead,
 		.suite = {
 			.aead = __VECS(hmac_sha384_des_cbc_tv_temp)
 		}
 	}, {
 		.alg = "authenc(hmac(sha384),cbc(des3_ede))",
+		.generic_driver = "authenc(hmac-sha384-lib,cbc(des3_ede-generic))",
 		.test = alg_test_aead,
 		.suite = {
 			.aead = __VECS(hmac_sha384_des3_ede_cbc_tv_temp)
 		}
 	}, {
-#endif
 		.alg = "authenc(hmac(sha384),ctr(aes))",
 		.test = alg_test_null,
 		.fips_allowed = 1,
+	}, {
+		.alg = "authenc(hmac(sha384),cts(cbc(aes)))",
+		.generic_driver = "authenc(hmac-sha384-lib,cts(cbc(aes-generic)))",
+		.test = alg_test_aead,
+		.suite = {
+			.aead = __VECS(krb5_test_aes256_cts_hmac_sha384_192)
+		}
 	}, {
 		.alg = "authenc(hmac(sha384),rfc3686(ctr(aes)))",
 		.test = alg_test_null,
 		.fips_allowed = 1,
 	}, {
 		.alg = "authenc(hmac(sha512),cbc(aes))",
+		.generic_driver = "authenc(hmac-sha512-lib,cbc(aes-generic))",
 		.fips_allowed = 1,
 		.test = alg_test_aead,
 		.suite = {
 			.aead = __VECS(hmac_sha512_aes_cbc_tv_temp)
 		}
 	}, {
-#if IS_ENABLED(CONFIG_CRYPTO_DES)
 		.alg = "authenc(hmac(sha512),cbc(des))",
+		.generic_driver = "authenc(hmac-sha512-lib,cbc(des-generic))",
 		.test = alg_test_aead,
 		.suite = {
 			.aead = __VECS(hmac_sha512_des_cbc_tv_temp)
 		}
 	}, {
 		.alg = "authenc(hmac(sha512),cbc(des3_ede))",
+		.generic_driver = "authenc(hmac-sha512-lib,cbc(des3_ede-generic))",
 		.test = alg_test_aead,
 		.suite = {
 			.aead = __VECS(hmac_sha512_des3_ede_cbc_tv_temp)
 		}
 	}, {
-#endif
 		.alg = "authenc(hmac(sha512),ctr(aes))",
 		.test = alg_test_null,
 		.fips_allowed = 1,
@@ -4651,8 +4331,6 @@ static const struct alg_test_desc alg_test_descs[] = {
 		.test = alg_test_null,
 		.fips_allowed = 1,
 	}, {
-#endif
-#if IS_ENABLED(CONFIG_CRYPTO_BLAKE2B)
 		.alg = "blake2b-160",
 		.test = alg_test_hash,
 		.fips_allowed = 0,
@@ -4681,7 +4359,6 @@ static const struct alg_test_desc alg_test_descs[] = {
 			.hash = __VECS(blake2b_512_tv_template)
 		}
 	}, {
-#endif
 		.alg = "cbc(aes)",
 		.test = alg_test_skcipher,
 		.fips_allowed = 1,
@@ -4689,55 +4366,42 @@ static const struct alg_test_desc alg_test_descs[] = {
 			.cipher = __VECS(aes_cbc_tv_template)
 		},
 	}, {
-#if IS_ENABLED(CONFIG_CRYPTO_ANUBIS)
 		.alg = "cbc(anubis)",
 		.test = alg_test_skcipher,
 		.suite = {
 			.cipher = __VECS(anubis_cbc_tv_template)
 		},
 	}, {
-#endif
-#if IS_ENABLED(CONFIG_CRYPTO_ARIA)
 		.alg = "cbc(aria)",
 		.test = alg_test_skcipher,
 		.suite = {
 			.cipher = __VECS(aria_cbc_tv_template)
 		},
 	}, {
-#endif
-#if IS_ENABLED(CONFIG_CRYPTO_BLOWFISH)
 		.alg = "cbc(blowfish)",
 		.test = alg_test_skcipher,
 		.suite = {
 			.cipher = __VECS(bf_cbc_tv_template)
 		},
 	}, {
-#endif
-#if IS_ENABLED(CONFIG_CRYPTO_CAMELLIA)
 		.alg = "cbc(camellia)",
 		.test = alg_test_skcipher,
 		.suite = {
 			.cipher = __VECS(camellia_cbc_tv_template)
 		},
 	}, {
-#endif
-#if IS_ENABLED(CONFIG_CRYPTO_CAST5)
 		.alg = "cbc(cast5)",
 		.test = alg_test_skcipher,
 		.suite = {
 			.cipher = __VECS(cast5_cbc_tv_template)
 		},
 	}, {
-#endif
-#if IS_ENABLED(CONFIG_CRYPTO_CAST6)
 		.alg = "cbc(cast6)",
 		.test = alg_test_skcipher,
 		.suite = {
 			.cipher = __VECS(cast6_cbc_tv_template)
 		},
 	}, {
-#endif
-#if IS_ENABLED(CONFIG_CRYPTO_DES)
 		.alg = "cbc(des)",
 		.test = alg_test_skcipher,
 		.suite = {
@@ -4750,7 +4414,6 @@ static const struct alg_test_desc alg_test_descs[] = {
 			.cipher = __VECS(des3_ede_cbc_tv_template)
 		},
 	}, {
-#endif
 		/* Same as cbc(aes) except the key is stored in
 		 * hardware secure memory which we reference by index
 		 */
@@ -4764,30 +4427,24 @@ static const struct alg_test_desc alg_test_descs[] = {
 		.alg = "cbc(psm4)",
 		.test = alg_test_null,
 	}, {
-#if IS_ENABLED(CONFIG_CRYPTO_SERPENT)
 		.alg = "cbc(serpent)",
 		.test = alg_test_skcipher,
 		.suite = {
 			.cipher = __VECS(serpent_cbc_tv_template)
 		},
 	}, {
-#endif
-#if IS_ENABLED(CONFIG_CRYPTO_SM4)
 		.alg = "cbc(sm4)",
 		.test = alg_test_skcipher,
 		.suite = {
 			.cipher = __VECS(sm4_cbc_tv_template)
 		}
 	}, {
-#endif
-#if IS_ENABLED(CONFIG_CRYPTO_TWOFISH)
 		.alg = "cbc(twofish)",
 		.test = alg_test_skcipher,
 		.suite = {
 			.cipher = __VECS(tf_cbc_tv_template)
 		},
 	}, {
-#endif
 #if IS_ENABLED(CONFIG_CRYPTO_PAES_S390)
 		.alg = "cbc-paes-s390",
 		.fips_allowed = 1,
@@ -4803,14 +4460,12 @@ static const struct alg_test_desc alg_test_descs[] = {
 			.hash = __VECS(aes_cbcmac_tv_template)
 		}
 	}, {
-#if IS_ENABLED(CONFIG_CRYPTO_SM4)
 		.alg = "cbcmac(sm4)",
 		.test = alg_test_hash,
 		.suite = {
 			.hash = __VECS(sm4_cbcmac_tv_template)
 		}
 	}, {
-#endif
 		.alg = "ccm(aes)",
 		.generic_driver = "ccm_base(ctr(aes-generic),cbcmac(aes-generic))",
 		.test = alg_test_aead,
@@ -4822,7 +4477,6 @@ static const struct alg_test_desc alg_test_descs[] = {
 			}
 		}
 	}, {
-#if IS_ENABLED(CONFIG_CRYPTO_SM4)
 		.alg = "ccm(sm4)",
 		.generic_driver = "ccm_base(ctr(sm4-generic),cbcmac(sm4-generic))",
 		.test = alg_test_aead,
@@ -4833,15 +4487,13 @@ static const struct alg_test_desc alg_test_descs[] = {
 			}
 		}
 	}, {
-#endif
-#if IS_ENABLED(CONFIG_CRYPTO_CHACHA20)
 		.alg = "chacha20",
+		.generic_driver = "chacha20-lib",
 		.test = alg_test_skcipher,
 		.suite = {
 			.cipher = __VECS(chacha20_tv_template)
 		},
 	}, {
-#endif
 		.alg = "cmac(aes)",
 		.fips_allowed = 1,
 		.test = alg_test_hash,
@@ -4855,61 +4507,34 @@ static const struct alg_test_desc alg_test_descs[] = {
 			.hash = __VECS(camellia_cmac128_tv_template)
 		}
 	}, {
-#if IS_ENABLED(CONFIG_CRYPTO_DES)
 		.alg = "cmac(des3_ede)",
 		.test = alg_test_hash,
 		.suite = {
 			.hash = __VECS(des3_ede_cmac64_tv_template)
 		}
 	}, {
-#endif
-#if IS_ENABLED(CONFIG_CRYPTO_SM4)
 		.alg = "cmac(sm4)",
 		.test = alg_test_hash,
 		.suite = {
 			.hash = __VECS(sm4_cmac128_tv_template)
 		}
 	}, {
-#endif
-		.alg = "compress_null",
-		.test = alg_test_null,
-	}, {
-#if IS_ENABLED(CONFIG_CRYPTO_CRC32)
 		.alg = "crc32",
+		.generic_driver = "crc32-lib",
 		.test = alg_test_hash,
 		.fips_allowed = 1,
 		.suite = {
 			.hash = __VECS(crc32_tv_template)
 		}
 	}, {
-#endif
-#if IS_ENABLED(CONFIG_CRYPTO_CRC32C)
 		.alg = "crc32c",
-		.test = alg_test_crc32c,
+		.generic_driver = "crc32c-lib",
+		.test = alg_test_hash,
 		.fips_allowed = 1,
 		.suite = {
 			.hash = __VECS(crc32c_tv_template)
 		}
 	}, {
-#endif
-#if IS_ENABLED(CONFIG_CRYPTO_CRC64_ROCKSOFT)
-		.alg = "crc64-rocksoft",
-		.test = alg_test_hash,
-		.fips_allowed = 1,
-		.suite = {
-			.hash = __VECS(crc64_rocksoft_tv_template)
-		}
-	}, {
-#endif
-#if IS_ENABLED(CONFIG_CRYPTO_CRCT10DIF)
-		.alg = "crct10dif",
-		.test = alg_test_hash,
-		.fips_allowed = 1,
-		.suite = {
-			.hash = __VECS(crct10dif_tv_template)
-		}
-	}, {
-#endif
 		.alg = "ctr(aes)",
 		.test = alg_test_skcipher,
 		.fips_allowed = 1,
@@ -4917,47 +4542,36 @@ static const struct alg_test_desc alg_test_descs[] = {
 			.cipher = __VECS(aes_ctr_tv_template)
 		}
 	}, {
-#if IS_ENABLED(CONFIG_CRYPTO_ARIA)
 		.alg = "ctr(aria)",
 		.test = alg_test_skcipher,
 		.suite = {
 			.cipher = __VECS(aria_ctr_tv_template)
 		}
 	}, {
-#endif
-#if IS_ENABLED(CONFIG_CRYPTO_BLOWFISH)
 		.alg = "ctr(blowfish)",
 		.test = alg_test_skcipher,
 		.suite = {
 			.cipher = __VECS(bf_ctr_tv_template)
 		}
 	}, {
-#endif
-#if IS_ENABLED(CONFIG_CRYPTO_CAMELLIA)
 		.alg = "ctr(camellia)",
 		.test = alg_test_skcipher,
 		.suite = {
 			.cipher = __VECS(camellia_ctr_tv_template)
 		}
 	}, {
-#endif
-#if IS_ENABLED(CONFIG_CRYPTO_CAST5)
 		.alg = "ctr(cast5)",
 		.test = alg_test_skcipher,
 		.suite = {
 			.cipher = __VECS(cast5_ctr_tv_template)
 		}
 	}, {
-#endif
-#if IS_ENABLED(CONFIG_CRYPTO_CAST6)
 		.alg = "ctr(cast6)",
 		.test = alg_test_skcipher,
 		.suite = {
 			.cipher = __VECS(cast6_ctr_tv_template)
 		}
 	}, {
-#endif
-#if IS_ENABLED(CONFIG_CRYPTO_DES)
 		.alg = "ctr(des)",
 		.test = alg_test_skcipher,
 		.suite = {
@@ -4970,7 +4584,6 @@ static const struct alg_test_desc alg_test_descs[] = {
 			.cipher = __VECS(des3_ede_ctr_tv_template)
 		}
 	}, {
-#endif
 		/* Same as ctr(aes) except the key is stored in
 		 * hardware secure memory which we reference by index
 		 */
@@ -4985,30 +4598,24 @@ static const struct alg_test_desc alg_test_descs[] = {
 		.alg = "ctr(psm4)",
 		.test = alg_test_null,
 	}, {
-#if IS_ENABLED(CONFIG_CRYPTO_SERPENT)
 		.alg = "ctr(serpent)",
 		.test = alg_test_skcipher,
 		.suite = {
 			.cipher = __VECS(serpent_ctr_tv_template)
 		}
 	}, {
-#endif
-#if IS_ENABLED(CONFIG_CRYPTO_SM4)
 		.alg = "ctr(sm4)",
 		.test = alg_test_skcipher,
 		.suite = {
 			.cipher = __VECS(sm4_ctr_tv_template)
 		}
 	}, {
-#endif
-#if IS_ENABLED(CONFIG_CRYPTO_TWOFISH)
 		.alg = "ctr(twofish)",
 		.test = alg_test_skcipher,
 		.suite = {
 			.cipher = __VECS(tf_ctr_tv_template)
 		}
 	}, {
-#endif
 #if IS_ENABLED(CONFIG_CRYPTO_PAES_S390)
 		.alg = "ctr-paes-s390",
 		.fips_allowed = 1,
@@ -5032,23 +4639,12 @@ static const struct alg_test_desc alg_test_descs[] = {
 		.test = alg_test_null,
 		.fips_allowed = 1,
 	}, {
-#if IS_ENABLED(CONFIG_CRYPTO_SM4)
 		.alg = "cts(cbc(sm4))",
 		.test = alg_test_skcipher,
 		.suite = {
 			.cipher = __VECS(sm4_cts_tv_template)
 		}
 	}, {
-#endif
-#if IS_ENABLED(CONFIG_CRYPTO_CURVE25519)
-		.alg = "curve25519",
-		.test = alg_test_kpp,
-		.suite = {
-			.kpp = __VECS(curve25519_tv_template)
-		}
-	}, {
-#endif
-#if IS_ENABLED(CONFIG_CRYPTO_DEFLATE)
 		.alg = "deflate",
 		.test = alg_test_comp,
 		.fips_allowed = 1,
@@ -5069,19 +4665,15 @@ static const struct alg_test_desc alg_test_descs[] = {
 			}
 		}
 	}, {
-#endif
-#if IS_ENABLED(CONFIG_CRYPTO_DH)
 		.alg = "dh",
 		.test = alg_test_kpp,
 		.suite = {
 			.kpp = __VECS(dh_tv_template)
 		}
 	}, {
-#endif
 		.alg = "digest_null",
 		.test = alg_test_null,
 	}, {
-#if IS_ENABLED(CONFIG_CRYPTO_DRBG_CTR)
 		.alg = "drbg_nopr_ctr_aes128",
 		.test = alg_test_drbg,
 		.fips_allowed = 1,
@@ -5103,8 +4695,6 @@ static const struct alg_test_desc alg_test_descs[] = {
 			.drbg = __VECS(drbg_nopr_ctr_aes256_tv_template)
 		}
 	}, {
-#endif
-#if IS_ENABLED(CONFIG_CRYPTO_DRBG_HMAC)
 		.alg = "drbg_nopr_hmac_sha256",
 		.test = alg_test_drbg,
 		.fips_allowed = 1,
@@ -5117,8 +4707,8 @@ static const struct alg_test_desc alg_test_descs[] = {
 		 * backend cipher -- covered by drbg_nopr_hmac_sha512 test
 		 */
 		.alg = "drbg_nopr_hmac_sha384",
-		.fips_allowed = 1,
 		.test = alg_test_null,
+		.fips_allowed = 1
 	}, {
 		.alg = "drbg_nopr_hmac_sha512",
 		.test = alg_test_drbg,
@@ -5126,8 +4716,6 @@ static const struct alg_test_desc alg_test_descs[] = {
 		.suite = {
 			.drbg = __VECS(drbg_nopr_hmac_sha512_tv_template)
 		}
-#endif
-#if IS_ENABLED(CONFIG_CRYPTO_DRBG_HASH)
 	}, {
 		.alg = "drbg_nopr_sha256",
 		.test = alg_test_drbg,
@@ -5138,15 +4726,13 @@ static const struct alg_test_desc alg_test_descs[] = {
 	}, {
 		/* covered by drbg_nopr_sha256 test */
 		.alg = "drbg_nopr_sha384",
-		.fips_allowed = 1,
 		.test = alg_test_null,
+		.fips_allowed = 1
 	}, {
 		.alg = "drbg_nopr_sha512",
 		.fips_allowed = 1,
 		.test = alg_test_null,
 	}, {
-#endif
-#if IS_ENABLED(CONFIG_CRYPTO_DRBG_CTR)
 		.alg = "drbg_pr_ctr_aes128",
 		.test = alg_test_drbg,
 		.fips_allowed = 1,
@@ -5163,8 +4749,6 @@ static const struct alg_test_desc alg_test_descs[] = {
 		.fips_allowed = 1,
 		.test = alg_test_null,
 	}, {
-#endif
-#if IS_ENABLED(CONFIG_CRYPTO_DRBG_HMAC)
 		.alg = "drbg_pr_hmac_sha256",
 		.test = alg_test_drbg,
 		.fips_allowed = 1,
@@ -5175,13 +4759,12 @@ static const struct alg_test_desc alg_test_descs[] = {
 		/* covered by drbg_pr_hmac_sha256 test */
 		.alg = "drbg_pr_hmac_sha384",
 		.test = alg_test_null,
+		.fips_allowed = 1
 	}, {
 		.alg = "drbg_pr_hmac_sha512",
 		.test = alg_test_null,
 		.fips_allowed = 1,
 	}, {
-#endif
-#if IS_ENABLED(CONFIG_CRYPTO_DRBG_HASH)
 		.alg = "drbg_pr_sha256",
 		.test = alg_test_drbg,
 		.fips_allowed = 1,
@@ -5192,12 +4775,12 @@ static const struct alg_test_desc alg_test_descs[] = {
 		/* covered by drbg_pr_sha256 test */
 		.alg = "drbg_pr_sha384",
 		.test = alg_test_null,
+		.fips_allowed = 1
 	}, {
 		.alg = "drbg_pr_sha512",
 		.fips_allowed = 1,
 		.test = alg_test_null,
 	}, {
-#endif
 		.alg = "ecb(aes)",
 		.test = alg_test_skcipher,
 		.fips_allowed = 1,
@@ -5205,15 +4788,12 @@ static const struct alg_test_desc alg_test_descs[] = {
 			.cipher = __VECS(aes_tv_template)
 		}
 	}, {
-#if IS_ENABLED(CONFIG_CRYPTO_ANUBIS)
 		.alg = "ecb(anubis)",
 		.test = alg_test_skcipher,
 		.suite = {
 			.cipher = __VECS(anubis_tv_template)
 		}
 	}, {
-#endif
-#if IS_ENABLED(CONFIG_CRYPTO_ARC4)
 		.alg = "ecb(arc4)",
 		.generic_driver = "arc4-generic",
 		.test = alg_test_skcipher,
@@ -5221,52 +4801,40 @@ static const struct alg_test_desc alg_test_descs[] = {
 			.cipher = __VECS(arc4_tv_template)
 		}
 	}, {
-#endif
-#if IS_ENABLED(CONFIG_CRYPTO_ARIA)
 		.alg = "ecb(aria)",
 		.test = alg_test_skcipher,
 		.suite = {
 			.cipher = __VECS(aria_tv_template)
 		}
 	}, {
-#endif
-#if IS_ENABLED(CONFIG_CRYPTO_BLOWFISH)
 		.alg = "ecb(blowfish)",
 		.test = alg_test_skcipher,
 		.suite = {
 			.cipher = __VECS(bf_tv_template)
 		}
 	}, {
-#endif
-#if IS_ENABLED(CONFIG_CRYPTO_CAMELLIA)
 		.alg = "ecb(camellia)",
 		.test = alg_test_skcipher,
 		.suite = {
 			.cipher = __VECS(camellia_tv_template)
 		}
 	}, {
-#endif
-#if IS_ENABLED(CONFIG_CRYPTO_CAST5)
 		.alg = "ecb(cast5)",
 		.test = alg_test_skcipher,
 		.suite = {
 			.cipher = __VECS(cast5_tv_template)
 		}
 	}, {
-#endif
-#if IS_ENABLED(CONFIG_CRYPTO_CAST6)
 		.alg = "ecb(cast6)",
 		.test = alg_test_skcipher,
 		.suite = {
 			.cipher = __VECS(cast6_tv_template)
 		}
 	}, {
-#endif
 		.alg = "ecb(cipher_null)",
 		.test = alg_test_null,
 		.fips_allowed = 1,
 	}, {
-#if IS_ENABLED(CONFIG_CRYPTO_DES)
 		.alg = "ecb(des)",
 		.test = alg_test_skcipher,
 		.suite = {
@@ -5279,8 +4847,6 @@ static const struct alg_test_desc alg_test_descs[] = {
 			.cipher = __VECS(des3_ede_tv_template)
 		}
 	}, {
-#endif
-#if IS_ENABLED(CONFIG_CRYPTO_FCRYPT)
 		.alg = "ecb(fcrypt)",
 		.test = alg_test_skcipher,
 		.suite = {
@@ -5290,15 +4856,12 @@ static const struct alg_test_desc alg_test_descs[] = {
 			}
 		}
 	}, {
-#endif
-#if IS_ENABLED(CONFIG_CRYPTO_KHAZAD)
 		.alg = "ecb(khazad)",
 		.test = alg_test_skcipher,
 		.suite = {
 			.cipher = __VECS(khazad_tv_template)
 		}
 	}, {
-#endif
 		/* Same as ecb(aes) except the key is stored in
 		 * hardware secure memory which we reference by index
 		 */
@@ -5306,47 +4869,36 @@ static const struct alg_test_desc alg_test_descs[] = {
 		.test = alg_test_null,
 		.fips_allowed = 1,
 	}, {
-#if IS_ENABLED(CONFIG_CRYPTO_SEED)
 		.alg = "ecb(seed)",
 		.test = alg_test_skcipher,
 		.suite = {
 			.cipher = __VECS(seed_tv_template)
 		}
 	}, {
-#endif
-#if IS_ENABLED(CONFIG_CRYPTO_SERPENT)
 		.alg = "ecb(serpent)",
 		.test = alg_test_skcipher,
 		.suite = {
 			.cipher = __VECS(serpent_tv_template)
 		}
 	}, {
-#endif
-#if IS_ENABLED(CONFIG_CRYPTO_SM4)
 		.alg = "ecb(sm4)",
 		.test = alg_test_skcipher,
 		.suite = {
 			.cipher = __VECS(sm4_tv_template)
 		}
 	}, {
-#endif
-#if IS_ENABLED(CONFIG_CRYPTO_TEA)
 		.alg = "ecb(tea)",
 		.test = alg_test_skcipher,
 		.suite = {
 			.cipher = __VECS(tea_tv_template)
 		}
 	}, {
-#endif
-#if IS_ENABLED(CONFIG_CRYPTO_TWOFISH)
 		.alg = "ecb(twofish)",
 		.test = alg_test_skcipher,
 		.suite = {
 			.cipher = __VECS(tf_tv_template)
 		}
 	}, {
-#endif
-#if IS_ENABLED(CONFIG_CRYPTO_TEA)
 		.alg = "ecb(xeta)",
 		.test = alg_test_skcipher,
 		.suite = {
@@ -5359,7 +4911,6 @@ static const struct alg_test_desc alg_test_descs[] = {
 			.cipher = __VECS(xtea_tv_template)
 		}
 	}, {
-#endif
 #if IS_ENABLED(CONFIG_CRYPTO_PAES_S390)
 		.alg = "ecb-paes-s390",
 		.fips_allowed = 1,
@@ -5369,7 +4920,6 @@ static const struct alg_test_desc alg_test_descs[] = {
 		}
 	}, {
 #endif
-#if IS_ENABLED(CONFIG_CRYPTO_ECDH)
 		.alg = "ecdh-nist-p192",
 		.test = alg_test_kpp,
 		.suite = {
@@ -5390,54 +4940,49 @@ static const struct alg_test_desc alg_test_descs[] = {
 			.kpp = __VECS(ecdh_p384_tv_template)
 		}
 	}, {
-#endif
-#if IS_ENABLED(CONFIG_CRYPTO_ECDSA)
 		.alg = "ecdsa-nist-p192",
-		.test = alg_test_akcipher,
+		.test = alg_test_sig,
 		.suite = {
-			.akcipher = __VECS(ecdsa_nist_p192_tv_template)
+			.sig = __VECS(ecdsa_nist_p192_tv_template)
 		}
 	}, {
 		.alg = "ecdsa-nist-p256",
-		.test = alg_test_akcipher,
+		.test = alg_test_sig,
 		.fips_allowed = 1,
 		.suite = {
-			.akcipher = __VECS(ecdsa_nist_p256_tv_template)
+			.sig = __VECS(ecdsa_nist_p256_tv_template)
 		}
 	}, {
 		.alg = "ecdsa-nist-p384",
-		.test = alg_test_akcipher,
+		.test = alg_test_sig,
 		.fips_allowed = 1,
 		.suite = {
-			.akcipher = __VECS(ecdsa_nist_p384_tv_template)
+			.sig = __VECS(ecdsa_nist_p384_tv_template)
 		}
 	}, {
 		.alg = "ecdsa-nist-p521",
-		.test = alg_test_akcipher,
+		.test = alg_test_sig,
 		.fips_allowed = 1,
 		.suite = {
-			.akcipher = __VECS(ecdsa_nist_p521_tv_template)
+			.sig = __VECS(ecdsa_nist_p521_tv_template)
 		}
 	}, {
-#endif
-#if IS_ENABLED(CONFIG_CRYPTO_ECRDSA)
 		.alg = "ecrdsa",
-		.test = alg_test_akcipher,
+		.test = alg_test_sig,
 		.suite = {
-			.akcipher = __VECS(ecrdsa_tv_template)
+			.sig = __VECS(ecrdsa_tv_template)
 		}
 	}, {
-#endif
-#if IS_ENABLED(CONFIG_CRYPTO_AUTHENC)
 		.alg = "essiv(authenc(hmac(sha256),cbc(aes)),sha256)",
+		.generic_driver = "essiv(authenc(hmac-sha256-lib,cbc(aes-generic)),sha256-lib)",
 		.test = alg_test_aead,
 		.fips_allowed = 1,
 		.suite = {
 			.aead = __VECS(essiv_hmac_sha256_aes_cbc_tv_temp)
 		}
 	}, {
-#endif
 		.alg = "essiv(cbc(aes),sha256)",
+		.generic_driver = "essiv(cbc(aes-generic),sha256-lib)",
 		.test = alg_test_skcipher,
 		.fips_allowed = 1,
 		.suite = {
@@ -5489,7 +5034,6 @@ static const struct alg_test_desc alg_test_descs[] = {
 			.aead = __VECS(aes_gcm_tv_template)
 		}
 	}, {
-#if IS_ENABLED(CONFIG_CRYPTO_ARIA)
 		.alg = "gcm(aria)",
 		.generic_driver = "gcm_base(ctr(aria-generic),ghash-generic)",
 		.test = alg_test_aead,
@@ -5497,8 +5041,6 @@ static const struct alg_test_desc alg_test_descs[] = {
 			.aead = __VECS(aria_gcm_tv_template)
 		}
 	}, {
-#endif
-#if IS_ENABLED(CONFIG_CRYPTO_SM4)
 		.alg = "gcm(sm4)",
 		.generic_driver = "gcm_base(ctr(sm4-generic),ghash-generic)",
 		.test = alg_test_aead,
@@ -5506,14 +5048,12 @@ static const struct alg_test_desc alg_test_descs[] = {
 			.aead = __VECS(sm4_gcm_tv_template)
 		}
 	}, {
-#endif
 		.alg = "ghash",
 		.test = alg_test_hash,
 		.suite = {
 			.hash = __VECS(ghash_tv_template)
 		}
 	}, {
-#if IS_ENABLED(CONFIG_CRYPTO_HCTR2)
 		.alg = "hctr2(aes)",
 		.generic_driver =
 		    "hctr2_base(xctr(aes-generic),polyval-generic)",
@@ -5522,30 +5062,29 @@ static const struct alg_test_desc alg_test_descs[] = {
 			.cipher = __VECS(aes_hctr2_tv_template)
 		}
 	}, {
-#endif
-#if IS_ENABLED(CONFIG_CRYPTO_MD5)
 		.alg = "hmac(md5)",
+		.generic_driver = "hmac-md5-lib",
 		.test = alg_test_hash,
 		.suite = {
 			.hash = __VECS(hmac_md5_tv_template)
 		}
 	}, {
-#endif
-#if IS_ENABLED(CONFIG_CRYPTO_RMD160)
 		.alg = "hmac(rmd160)",
 		.test = alg_test_hash,
 		.suite = {
 			.hash = __VECS(hmac_rmd160_tv_template)
 		}
 	}, {
-#endif
 		.alg = "hmac(sha1)",
+		.generic_driver = "hmac-sha1-lib",
 		.test = alg_test_hash,
+		.fips_allowed = 1,
 		.suite = {
 			.hash = __VECS(hmac_sha1_tv_template)
 		}
 	}, {
 		.alg = "hmac(sha224)",
+		.generic_driver = "hmac-sha224-lib",
 		.test = alg_test_hash,
 		.fips_allowed = 1,
 		.suite = {
@@ -5553,6 +5092,7 @@ static const struct alg_test_desc alg_test_descs[] = {
 		}
 	}, {
 		.alg = "hmac(sha256)",
+		.generic_driver = "hmac-sha256-lib",
 		.test = alg_test_hash,
 		.fips_allowed = 1,
 		.suite = {
@@ -5588,6 +5128,7 @@ static const struct alg_test_desc alg_test_descs[] = {
 		}
 	}, {
 		.alg = "hmac(sha384)",
+		.generic_driver = "hmac-sha384-lib",
 		.test = alg_test_hash,
 		.fips_allowed = 1,
 		.suite = {
@@ -5595,21 +5136,19 @@ static const struct alg_test_desc alg_test_descs[] = {
 		}
 	}, {
 		.alg = "hmac(sha512)",
+		.generic_driver = "hmac-sha512-lib",
 		.test = alg_test_hash,
 		.fips_allowed = 1,
 		.suite = {
 			.hash = __VECS(hmac_sha512_tv_template)
 		}
 	}, {
-#if IS_ENABLED(CONFIG_CRYPTO_SM3)
 		.alg = "hmac(sm3)",
 		.test = alg_test_hash,
 		.suite = {
 			.hash = __VECS(hmac_sm3_tv_template)
 		}
 	}, {
-#endif
-#if IS_ENABLED(CONFIG_CRYPTO_STREEBOG)
 		.alg = "hmac(streebog256)",
 		.test = alg_test_hash,
 		.suite = {
@@ -5622,21 +5161,14 @@ static const struct alg_test_desc alg_test_descs[] = {
 			.hash = __VECS(hmac_streebog512_tv_template)
 		}
 	}, {
-#endif
 		.alg = "jitterentropy_rng",
 		.fips_allowed = 1,
 		.test = alg_test_null,
 	}, {
-#if IS_ENABLED(CONFIG_CRYPTO_KEYWRAP)
-		.alg = "kw(aes)",
-		.test = alg_test_skcipher,
-		.fips_allowed = 1,
-		.suite = {
-			.cipher = __VECS(aes_kw_tv_template)
-		}
+		.alg = "krb5enc(cmac(camellia),cts(cbc(camellia)))",
+		.test = alg_test_aead,
+		.suite.aead = __VECS(krb5_test_camellia_cts_cmac)
 	}, {
-#endif
-#if IS_ENABLED(CONFIG_CRYPTO_LRW)
 		.alg = "lrw(aes)",
 		.generic_driver = "lrw(ecb(aes-generic))",
 		.test = alg_test_skcipher,
@@ -5658,7 +5190,6 @@ static const struct alg_test_desc alg_test_descs[] = {
 			.cipher = __VECS(cast6_lrw_tv_template)
 		}
 	}, {
-#if IS_ENABLED(CONFIG_CRYPTO_SERPENT)
 		.alg = "lrw(serpent)",
 		.generic_driver = "lrw(ecb(serpent-generic))",
 		.test = alg_test_skcipher,
@@ -5666,7 +5197,6 @@ static const struct alg_test_desc alg_test_descs[] = {
 			.cipher = __VECS(serpent_lrw_tv_template)
 		}
 	}, {
-#endif
 		.alg = "lrw(twofish)",
 		.generic_driver = "lrw(ecb(twofish-generic))",
 		.test = alg_test_skcipher,
@@ -5674,8 +5204,6 @@ static const struct alg_test_desc alg_test_descs[] = {
 			.cipher = __VECS(tf_lrw_tv_template)
 		}
 	}, {
-#endif
-#if IS_ENABLED(CONFIG_CRYPTO_LZ4)
 		.alg = "lz4",
 		.test = alg_test_comp,
 		.fips_allowed = 1,
@@ -5686,8 +5214,6 @@ static const struct alg_test_desc alg_test_descs[] = {
 			}
 		}
 	}, {
-#endif
-#if IS_ENABLED(CONFIG_CRYPTO_LZ4HC)
 		.alg = "lz4hc",
 		.test = alg_test_comp,
 		.fips_allowed = 1,
@@ -5698,8 +5224,6 @@ static const struct alg_test_desc alg_test_descs[] = {
 			}
 		}
 	}, {
-#endif
-#if IS_ENABLED(CONFIG_CRYPTO_LZO)
 		.alg = "lzo",
 		.test = alg_test_comp,
 		.fips_allowed = 1,
@@ -5720,96 +5244,132 @@ static const struct alg_test_desc alg_test_descs[] = {
 			}
 		}
 	}, {
-#endif
-#if IS_ENABLED(CONFIG_CRYPTO_MD4)
 		.alg = "md4",
 		.test = alg_test_hash,
 		.suite = {
 			.hash = __VECS(md4_tv_template)
 		}
 	}, {
-#endif
-#if IS_ENABLED(CONFIG_CRYPTO_MD5)
 		.alg = "md5",
+		.generic_driver = "md5-lib",
 		.test = alg_test_hash,
 		.suite = {
 			.hash = __VECS(md5_tv_template)
 		}
 	}, {
-#endif
-#if IS_ENABLED(CONFIG_CRYPTO_MICHAEL_MIC)
 		.alg = "michael_mic",
 		.test = alg_test_hash,
 		.suite = {
 			.hash = __VECS(michael_mic_tv_template)
 		}
 	}, {
-#endif
-#if IS_ENABLED(CONFIG_CRYPTO_NHPOLY1305)
 		.alg = "nhpoly1305",
 		.test = alg_test_hash,
 		.suite = {
 			.hash = __VECS(nhpoly1305_tv_template)
 		}
 	}, {
-#endif
-#if IS_ENABLED(CONFIG_CRYPTO_FCRYPT)
+		.alg = "p1363(ecdsa-nist-p192)",
+		.test = alg_test_null,
+	}, {
+		.alg = "p1363(ecdsa-nist-p256)",
+		.test = alg_test_sig,
+		.fips_allowed = 1,
+		.suite = {
+			.sig = __VECS(p1363_ecdsa_nist_p256_tv_template)
+		}
+	}, {
+		.alg = "p1363(ecdsa-nist-p384)",
+		.test = alg_test_null,
+		.fips_allowed = 1,
+	}, {
+		.alg = "p1363(ecdsa-nist-p521)",
+		.test = alg_test_null,
+		.fips_allowed = 1,
+	}, {
 		.alg = "pcbc(fcrypt)",
 		.test = alg_test_skcipher,
 		.suite = {
 			.cipher = __VECS(fcrypt_pcbc_tv_template)
 		}
 	}, {
-#endif
-#if IS_ENABLED(CONFIG_CRYPTO_RSA)
-		.alg = "pkcs1pad(rsa,sha224)",
-		.test = alg_test_null,
-		.fips_allowed = 1,
-	}, {
-		.alg = "pkcs1pad(rsa,sha256)",
-		.test = alg_test_akcipher,
-		.fips_allowed = 1,
-		.suite = {
-			.akcipher = __VECS(pkcs1pad_rsa_tv_template)
-		}
-	}, {
-		.alg = "pkcs1pad(rsa,sha3-256)",
-		.test = alg_test_null,
-		.fips_allowed = 1,
-	}, {
-		.alg = "pkcs1pad(rsa,sha3-384)",
-		.test = alg_test_null,
-		.fips_allowed = 1,
-	}, {
-		.alg = "pkcs1pad(rsa,sha3-512)",
-		.test = alg_test_null,
-		.fips_allowed = 1,
-	}, {
-		.alg = "pkcs1pad(rsa,sha384)",
-		.test = alg_test_null,
-		.fips_allowed = 1,
-	}, {
-		.alg = "pkcs1pad(rsa,sha512)",
-		.test = alg_test_null,
-		.fips_allowed = 1,
-	}, {
-#endif
-#if IS_ENABLED(CONFIG_CRYPTO_POLY1305)
-		.alg = "poly1305",
+#if IS_ENABLED(CONFIG_CRYPTO_PHMAC_S390)
+		.alg = "phmac(sha224)",
 		.test = alg_test_hash,
+		.fips_allowed = 1,
 		.suite = {
-			.hash = __VECS(poly1305_tv_template)
+			.hash = __VECS(hmac_sha224_tv_template)
+		}
+	}, {
+		.alg = "phmac(sha256)",
+		.test = alg_test_hash,
+		.fips_allowed = 1,
+		.suite = {
+			.hash = __VECS(hmac_sha256_tv_template)
+		}
+	}, {
+		.alg = "phmac(sha384)",
+		.test = alg_test_hash,
+		.fips_allowed = 1,
+		.suite = {
+			.hash = __VECS(hmac_sha384_tv_template)
+		}
+	}, {
+		.alg = "phmac(sha512)",
+		.test = alg_test_hash,
+		.fips_allowed = 1,
+		.suite = {
+			.hash = __VECS(hmac_sha512_tv_template)
 		}
 	}, {
 #endif
-#if IS_ENABLED(CONFIG_CRYPTO_POLYVAL)
+		.alg = "pkcs1(rsa,none)",
+		.test = alg_test_sig,
+		.suite = {
+			.sig = __VECS(pkcs1_rsa_none_tv_template)
+		}
+	}, {
+		.alg = "pkcs1(rsa,sha224)",
+		.test = alg_test_null,
+		.fips_allowed = 1,
+	}, {
+		.alg = "pkcs1(rsa,sha256)",
+		.test = alg_test_sig,
+		.fips_allowed = 1,
+		.suite = {
+			.sig = __VECS(pkcs1_rsa_tv_template)
+		}
+	}, {
+		.alg = "pkcs1(rsa,sha3-256)",
+		.test = alg_test_null,
+		.fips_allowed = 1,
+	}, {
+		.alg = "pkcs1(rsa,sha3-384)",
+		.test = alg_test_null,
+		.fips_allowed = 1,
+	}, {
+		.alg = "pkcs1(rsa,sha3-512)",
+		.test = alg_test_null,
+		.fips_allowed = 1,
+	}, {
+		.alg = "pkcs1(rsa,sha384)",
+		.test = alg_test_null,
+		.fips_allowed = 1,
+	}, {
+		.alg = "pkcs1(rsa,sha512)",
+		.test = alg_test_null,
+		.fips_allowed = 1,
+	}, {
+		.alg = "pkcs1pad(rsa)",
+		.test = alg_test_null,
+		.fips_allowed = 1,
+	}, {
 		.alg = "polyval",
 		.test = alg_test_hash,
 		.suite = {
 			.hash = __VECS(polyval_tv_template)
 		}
 	}, {
-#endif
 		.alg = "rfc3686(ctr(aes))",
 		.test = alg_test_skcipher,
 		.fips_allowed = 1,
@@ -5817,14 +5377,12 @@ static const struct alg_test_desc alg_test_descs[] = {
 			.cipher = __VECS(aes_ctr_rfc3686_tv_template)
 		}
 	}, {
-#if IS_ENABLED(CONFIG_CRYPTO_SM4)
 		.alg = "rfc3686(ctr(sm4))",
 		.test = alg_test_skcipher,
 		.suite = {
 			.cipher = __VECS(sm4_ctr_rfc3686_tv_template)
 		}
 	}, {
-#endif
 		.alg = "rfc4106(gcm(aes))",
 		.generic_driver = "rfc4106(gcm_base(ctr(aes-generic),ghash-generic))",
 		.test = alg_test_aead,
@@ -5860,14 +5418,15 @@ static const struct alg_test_desc alg_test_descs[] = {
 			}
 		}
 	}, {
-#if IS_ENABLED(CONFIG_CRYPTO_CHACHA20POLY1305)
 		.alg = "rfc7539(chacha20,poly1305)",
+		.generic_driver = "rfc7539(chacha20-lib,poly1305-generic)",
 		.test = alg_test_aead,
 		.suite = {
 			.aead = __VECS(rfc7539_tv_template)
 		}
 	}, {
 		.alg = "rfc7539esp(chacha20,poly1305)",
+		.generic_driver = "rfc7539esp(chacha20-lib,poly1305-generic)",
 		.test = alg_test_aead,
 		.suite = {
 			.aead = {
@@ -5877,16 +5436,12 @@ static const struct alg_test_desc alg_test_descs[] = {
 			}
 		}
 	}, {
-#endif
-#if IS_ENABLED(CONFIG_CRYPTO_RMD160)
 		.alg = "rmd160",
 		.test = alg_test_hash,
 		.suite = {
 			.hash = __VECS(rmd160_tv_template)
 		}
 	}, {
-#endif
-#if IS_ENABLED(CONFIG_CRYPTO_RSA)
 		.alg = "rsa",
 		.test = alg_test_akcipher,
 		.fips_allowed = 1,
@@ -5894,14 +5449,16 @@ static const struct alg_test_desc alg_test_descs[] = {
 			.akcipher = __VECS(rsa_tv_template)
 		}
 	}, {
-#endif
 		.alg = "sha1",
+		.generic_driver = "sha1-lib",
 		.test = alg_test_hash,
+		.fips_allowed = 1,
 		.suite = {
 			.hash = __VECS(sha1_tv_template)
 		}
 	}, {
 		.alg = "sha224",
+		.generic_driver = "sha224-lib",
 		.test = alg_test_hash,
 		.fips_allowed = 1,
 		.suite = {
@@ -5909,6 +5466,7 @@ static const struct alg_test_desc alg_test_descs[] = {
 		}
 	}, {
 		.alg = "sha256",
+		.generic_driver = "sha256-lib",
 		.test = alg_test_hash,
 		.fips_allowed = 1,
 		.suite = {
@@ -5944,6 +5502,7 @@ static const struct alg_test_desc alg_test_descs[] = {
 		}
 	}, {
 		.alg = "sha384",
+		.generic_driver = "sha384-lib",
 		.test = alg_test_hash,
 		.fips_allowed = 1,
 		.suite = {
@@ -5951,21 +5510,19 @@ static const struct alg_test_desc alg_test_descs[] = {
 		}
 	}, {
 		.alg = "sha512",
+		.generic_driver = "sha512-lib",
 		.test = alg_test_hash,
 		.fips_allowed = 1,
 		.suite = {
 			.hash = __VECS(sha512_tv_template)
 		}
 	}, {
-#if IS_ENABLED(CONFIG_CRYPTO_SM3)
 		.alg = "sm3",
 		.test = alg_test_hash,
 		.suite = {
 			.hash = __VECS(sm3_tv_template)
 		}
 	}, {
-#endif
-#if IS_ENABLED(CONFIG_CRYPTO_STREEBOG)
 		.alg = "streebog256",
 		.test = alg_test_hash,
 		.suite = {
@@ -5978,16 +5535,6 @@ static const struct alg_test_desc alg_test_descs[] = {
 			.hash = __VECS(streebog512_tv_template)
 		}
 	}, {
-#endif
-#if IS_ENABLED(CONFIG_CRYPTO_VMAC)
-		.alg = "vmac64(aes)",
-		.test = alg_test_hash,
-		.suite = {
-			.hash = __VECS(vmac64_aes_tv_template)
-		}
-	}, {
-#endif
-#if IS_ENABLED(CONFIG_CRYPTO_WP512)
 		.alg = "wp256",
 		.test = alg_test_hash,
 		.suite = {
@@ -6006,8 +5553,33 @@ static const struct alg_test_desc alg_test_descs[] = {
 			.hash = __VECS(wp512_tv_template)
 		}
 	}, {
-#endif
-#if IS_ENABLED(CONFIG_CRYPTO_XCBC)
+		.alg = "x962(ecdsa-nist-p192)",
+		.test = alg_test_sig,
+		.suite = {
+			.sig = __VECS(x962_ecdsa_nist_p192_tv_template)
+		}
+	}, {
+		.alg = "x962(ecdsa-nist-p256)",
+		.test = alg_test_sig,
+		.fips_allowed = 1,
+		.suite = {
+			.sig = __VECS(x962_ecdsa_nist_p256_tv_template)
+		}
+	}, {
+		.alg = "x962(ecdsa-nist-p384)",
+		.test = alg_test_sig,
+		.fips_allowed = 1,
+		.suite = {
+			.sig = __VECS(x962_ecdsa_nist_p384_tv_template)
+		}
+	}, {
+		.alg = "x962(ecdsa-nist-p521)",
+		.test = alg_test_sig,
+		.fips_allowed = 1,
+		.suite = {
+			.sig = __VECS(x962_ecdsa_nist_p521_tv_template)
+		}
+	}, {
 		.alg = "xcbc(aes)",
 		.test = alg_test_hash,
 		.suite = {
@@ -6020,29 +5592,26 @@ static const struct alg_test_desc alg_test_descs[] = {
 			.hash = __VECS(sm4_xcbc128_tv_template)
 		}
 	}, {
-#endif
-#if IS_ENABLED(CONFIG_CRYPTO_CHACHA20)
 		.alg = "xchacha12",
+		.generic_driver = "xchacha12-lib",
 		.test = alg_test_skcipher,
 		.suite = {
 			.cipher = __VECS(xchacha12_tv_template)
 		},
 	}, {
 		.alg = "xchacha20",
+		.generic_driver = "xchacha20-lib",
 		.test = alg_test_skcipher,
 		.suite = {
 			.cipher = __VECS(xchacha20_tv_template)
 		},
 	}, {
-#endif
-#if IS_ENABLED(CONFIG_CRYPTO_XCTR)
 		.alg = "xctr(aes)",
 		.test = alg_test_skcipher,
 		.suite = {
 			.cipher = __VECS(aes_xctr_tv_template)
 		}
 	}, {
-#endif
 		.alg = "xts(aes)",
 		.generic_driver = "xts(ecb(aes-generic))",
 		.test = alg_test_skcipher,
@@ -6051,7 +5620,6 @@ static const struct alg_test_desc alg_test_descs[] = {
 			.cipher = __VECS(aes_xts_tv_template)
 		}
 	}, {
-#if IS_ENABLED(CONFIG_CRYPTO_CAMELLIA)
 		.alg = "xts(camellia)",
 		.generic_driver = "xts(ecb(camellia-generic))",
 		.test = alg_test_skcipher,
@@ -6059,8 +5627,6 @@ static const struct alg_test_desc alg_test_descs[] = {
 			.cipher = __VECS(camellia_xts_tv_template)
 		}
 	}, {
-#endif
-#if IS_ENABLED(CONFIG_CRYPTO_CAST6)
 		.alg = "xts(cast6)",
 		.generic_driver = "xts(ecb(cast6-generic))",
 		.test = alg_test_skcipher,
@@ -6068,7 +5634,6 @@ static const struct alg_test_desc alg_test_descs[] = {
 			.cipher = __VECS(cast6_xts_tv_template)
 		}
 	}, {
-#endif
 		/* Same as xts(aes) except the key is stored in
 		 * hardware secure memory which we reference by index
 		 */
@@ -6076,7 +5641,6 @@ static const struct alg_test_desc alg_test_descs[] = {
 		.test = alg_test_null,
 		.fips_allowed = 1,
 	}, {
-#if IS_ENABLED(CONFIG_CRYPTO_SERPENT)
 		.alg = "xts(serpent)",
 		.generic_driver = "xts(ecb(serpent-generic))",
 		.test = alg_test_skcipher,
@@ -6091,8 +5655,6 @@ static const struct alg_test_desc alg_test_descs[] = {
 			.cipher = __VECS(sm4_xts_tv_template)
 		}
 	}, {
-#endif
-#if IS_ENABLED(CONFIG_CRYPTO_TWOFISH)
 		.alg = "xts(twofish)",
 		.generic_driver = "xts(ecb(twofish-generic))",
 		.test = alg_test_skcipher,
@@ -6100,7 +5662,6 @@ static const struct alg_test_desc alg_test_descs[] = {
 			.cipher = __VECS(tf_xts_tv_template)
 		}
 	}, {
-#endif
 #if IS_ENABLED(CONFIG_CRYPTO_PAES_S390)
 		.alg = "xts-paes-s390",
 		.fips_allowed = 1,
@@ -6110,7 +5671,6 @@ static const struct alg_test_desc alg_test_descs[] = {
 		}
 	}, {
 #endif
-#if IS_ENABLED(CONFIG_CRYPTO_XXHASH)
 		.alg = "xxhash64",
 		.test = alg_test_hash,
 		.fips_allowed = 1,
@@ -6118,7 +5678,6 @@ static const struct alg_test_desc alg_test_descs[] = {
 			.hash = __VECS(xxhash64_tv_template)
 		}
 	}, {
-#endif
 		.alg = "zstd",
 		.test = alg_test_comp,
 		.fips_allowed = 1,
@@ -6170,9 +5729,8 @@ static void testmgr_onetime_init(void)
 	alg_check_test_descs_order();
 	alg_check_testvec_configs();
 
-#ifdef CONFIG_CRYPTO_MANAGER_EXTRA_TESTS
-	pr_warn("alg: extra crypto tests enabled.  This is intended for developer use only.\n");
-#endif
+	if (!noslowtests)
+		pr_warn("alg: full crypto tests enabled.  This is intended for developer use only.\n");
 }
 
 static int alg_find_test(const char *alg)
@@ -6261,20 +5819,10 @@ int alg_test(const char *driver, const char *alg, u32 type, u32 mask)
 
 test_done:
 	if (rc) {
-		if (fips_enabled || panic_on_fail) {
-			if (fips_prevent_panic) {
-				printk("FIPS test: prevent kernel panic\n");
-				printk("FIPS test: Reverting the flag value to avoid kernel panic\n");
-
-				pr_warn("alg: self-tests for %s using %s failed (rc=%d)",
-					alg, driver, rc);
-				return 0;
-			}
-
+		if (fips_enabled) {
 			fips_fail_notify();
-			panic("alg: self-tests for %s (%s) failed in %s mode!\n",
-			      driver, alg,
-			      fips_enabled ? "fips" : "panic_on_fail");
+			panic("alg: self-tests for %s (%s) failed in fips mode!\n",
+			      driver, alg);
 		}
 		pr_warn("alg: self-tests for %s using %s failed (rc=%d)",
 			alg, driver, rc);
@@ -6319,6 +5867,6 @@ non_fips_alg:
 	return alg_fips_disabled(driver, alg);
 }
 
-#endif /* CONFIG_CRYPTO_MANAGER_DISABLE_TESTS */
+#endif /* CONFIG_CRYPTO_SELFTESTS */
 
 EXPORT_SYMBOL_GPL(alg_test);
