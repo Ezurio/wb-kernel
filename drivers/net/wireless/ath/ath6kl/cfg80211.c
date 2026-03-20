@@ -4177,6 +4177,6 @@ void ath6kl_cfg80211_destroy(struct ath6kl *ar)
 /*tx power value is dbm */
 int ath6kl_get_txpower(struct wiphy *wiphy, int *dbm)
 {
-	ath6kl_cfg80211_get_txpower( wiphy, NULL, dbm );
+	ath6kl_cfg80211_get_txpower(wiphy, NULL, 0, 0, dbm);
 	return *dbm;
 }

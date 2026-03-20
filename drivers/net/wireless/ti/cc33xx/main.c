@@ -3015,7 +3015,7 @@ static int cc33xx_config_vif(struct cc33xx *wl, struct cc33xx_vif *wlvif,
 	return 0;
 }
 
-static int cc33xx_op_config(struct ieee80211_hw *hw, u32 changed)
+static int cc33xx_op_config(struct ieee80211_hw *hw, int radio_idx, u32 changed)
 {
 	struct cc33xx *wl = hw->priv;
 	struct cc33xx_vif *wlvif;
@@ -3696,12 +3696,12 @@ out:
 	return 0;
 }
 
-static int cc33xx_op_set_frag_threshold(struct ieee80211_hw *hw, u32 value)
+static int cc33xx_op_set_frag_threshold(struct ieee80211_hw *hw, int radio_idx, u32 value)
 {
 	return 0;
 }
 
-static int cc33xx_op_set_rts_threshold(struct ieee80211_hw *hw, u32 value)
+static int cc33xx_op_set_rts_threshold(struct ieee80211_hw *hw, int radio_idx, u32 value)
 {
 	return 0;
 }
@@ -5176,7 +5176,7 @@ static int cc33xx_op_cancel_remain_on_channel(struct ieee80211_hw *hw,
 
 static void cc33xx_op_sta_rc_update(struct ieee80211_hw *hw,
 				    struct ieee80211_vif *vif,
-				    struct ieee80211_sta *sta,
+				    struct ieee80211_link_sta *link_sta,
 				    u32 changed)
 {
 	struct cc33xx_vif *wlvif = cc33xx_vif_to_data(vif);
@@ -5187,8 +5187,8 @@ static void cc33xx_op_sta_rc_update(struct ieee80211_hw *hw,
 		return;
 
 	/* this callback is atomic, so schedule a new work */
-	wlvif->rc_update_bw = sta->deflink.bandwidth;
-	memcpy(&wlvif->rc_ht_cap, &sta->deflink.ht_cap, sizeof(sta->deflink.ht_cap));
+	wlvif->rc_update_bw = link_sta->bandwidth;
+	memcpy(&wlvif->rc_ht_cap, &link_sta->ht_cap, sizeof(link_sta->ht_cap));
 	ieee80211_queue_work(hw, &wlvif->rc_update_work);
 }
 
@@ -5294,7 +5294,7 @@ static const struct ieee80211_ops cc33xx_ops = {
 	.assign_vif_chanctx = cc33xx_op_assign_vif_chanctx,
 	.unassign_vif_chanctx = cc33xx_op_unassign_vif_chanctx,
 	.switch_vif_chanctx = cc33xx_op_switch_vif_chanctx,
-	.sta_rc_update = cc33xx_op_sta_rc_update,
+	.link_sta_rc_update = cc33xx_op_sta_rc_update,
 	.sta_statistics = cc33xx_op_sta_statistics,
 	.get_expected_throughput = cc33xx_op_get_expected_throughput,
 	.wake_tx_queue = ieee80211_handle_wake_tx_queue,
@@ -5372,7 +5372,7 @@ static const struct ieee80211_ops cc33xx_ops = {
 	.assign_vif_chanctx = cc33xx_op_assign_vif_chanctx,
 	.unassign_vif_chanctx = cc33xx_op_unassign_vif_chanctx,
 	.switch_vif_chanctx = cc33xx_op_switch_vif_chanctx,
-	.sta_rc_update = cc33xx_op_sta_rc_update,
+	.link_sta_rc_update = cc33xx_op_sta_rc_update,
 	.sta_statistics = cc33xx_op_sta_statistics,
 	.get_expected_throughput = cc33xx_op_get_expected_throughput,
 	CFG80211_TESTMODE_CMD(cc33xx_tm_cmd)
@@ -6354,7 +6354,7 @@ MODULE_DEVICE_TABLE(platform, cc33xx_id_table);
 
 static struct platform_driver cc33xx_driver = {
 	.probe		= cc33xx_probe,
-	.remove_new	= wlcore_remove,
+	.remove		= wlcore_remove,
 	.id_table	= cc33xx_id_table,
 	.driver = {
 		.name	= "cc33xx_driver",
@@ -6390,3 +6390,4 @@ MODULE_AUTHOR("Luciano Coelho <coelho@ti.com>");
 MODULE_AUTHOR("Juuso Oikarinen <juuso.oikarinen@nokia.com>");
 MODULE_FIRMWARE(SECOND_LOADER_NAME);
 MODULE_FIRMWARE(FW_NAME);
+MODULE_DESCRIPTION("TI CC33XX core driver");

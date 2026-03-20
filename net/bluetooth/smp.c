@@ -36,7 +36,7 @@
 #include "ecdh_helper.h"
 #include "smp.h"
 
-MODULE_IMPORT_NS(CRYPTO_INTERNAL);
+MODULE_IMPORT_NS("CRYPTO_INTERNAL");
 
 #define SMP_DEV(hdev) \
 	((struct smp_dev *)((struct l2cap_chan *)((hdev)->smp_data))->data)

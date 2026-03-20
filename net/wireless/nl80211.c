@@ -10571,11 +10571,11 @@ static int nl80211_trigger_scan(struct sk_buff *skb, struct genl_info *info)
 			scan_data =
 				nla_data(info->attrs[NL80211_ATTR_MEASUREMENT_DURATION]);
 			// note, duration was already populated above
-			request->passive_channel_time =
+			request->req.passive_channel_time =
 				scan_data->passive_channel_time;
-			request->probe_delay_time =
+			request->req.probe_delay_time =
 				scan_data->probe_delay_time;
-			request->scan_suspend_time =
+			request->req.scan_suspend_time =
 				scan_data->scan_suspend_time;
 		}
 	}

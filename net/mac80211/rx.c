@@ -3282,7 +3282,7 @@ ieee80211_rx_h_data(struct ieee80211_rx_data *rx)
 #ifndef _REMOVE_SUMMIT_MODS_
 	if (!ieee80211_dms_allowed(rx)) {
 		/* DMS: drop normal multicast that are being DMS delivered */
-		return RX_DROP_MONITOR;
+		return RX_DROP;
 	}
 #endif
 

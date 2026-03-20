@@ -57,7 +57,7 @@ out:
 static DEVICE_ATTR_RW(ble_enable);
 
 static ssize_t cc33xx_sysfs_read_fwlog(struct file *filp, struct kobject *kobj,
-				       struct bin_attribute *bin_attr,
+				       const struct bin_attribute *bin_attr,
 				       char *buffer, loff_t pos, size_t count)
 {
 	struct device *dev = container_of(kobj, struct device, kobj);

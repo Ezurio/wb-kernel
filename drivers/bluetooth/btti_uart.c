@@ -25,7 +25,7 @@
 #include <net/bluetooth/bluetooth.h>
 #include <net/bluetooth/hci_core.h>
 
-#include "h4_recv.h"
+#include "hci_uart.h"
 
 #define VERSION "0.84"
 
@@ -89,6 +89,7 @@ static const char *event_to_string(enum sm_event event)
 
 struct btti_uart_dev {
 	struct hci_dev *hdev;
+	struct hci_uart hu;
 	struct serdev_device *serdev;
 	struct regulator *reg;
 	struct notifier_block nb;
@@ -222,7 +223,8 @@ static int btti_uart_register_hci_device(struct btti_uart_dev *bdev)
 	hdev->send  = btti_uart_send_frame;
 	SET_HCIDEV_DEV(hdev, &serdev->dev);
 
-	set_bit(HCI_QUIRK_STRICT_DUPLICATE_FILTER, &hdev->quirks);
+	bdev->hu.hdev = hdev;
+	hci_set_quirk(hdev, HCI_QUIRK_STRICT_DUPLICATE_FILTER);
 
 	ret = hci_register_dev(hdev);
 	if (ret){
@@ -473,7 +475,7 @@ static size_t btti_uart_receive_buf(struct serdev_device *serdev, const u8 *data
 		return btti_uart_wakeup_event_match(serdev, data, count);
 	}
 
-	bdev->rx_skb = h4_recv_buf(bdev->hdev, bdev->rx_skb, data, count,
+	bdev->rx_skb = h4_recv_buf(&bdev->hu, bdev->rx_skb, data, count,
 				   vnd->recv_pkts, vnd->recv_pkts_cnt);
 	if (IS_ERR(bdev->rx_skb)) {
 		int err = PTR_ERR(bdev->rx_skb);

@@ -177,7 +177,7 @@ MODULE_DEVICE_TABLE(of, gpio_wakeup_of_match);
 
 static struct platform_driver gpio_wakeup_driver = {
 	.probe	= gpio_wakeup_probe,
-	.remove_new	= gpio_wakeup_remove,
+	.remove	= gpio_wakeup_remove,
 	.driver	= {
 		.name	= "gpio-wakeup",
 		.owner	= THIS_MODULE,

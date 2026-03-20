@@ -74,7 +74,7 @@ static void __cc33xx_spi_lock(struct cc33xx_spi_glue *glue)
 {
 	if (glue->locking_pid != current->pid)
 	{
-		spi_bus_lock(to_spi_device(glue->dev)->master);
+		spi_bus_lock(to_spi_device(glue->dev)->controller);
 		glue->locking_pid = current->pid;
 		glue->lock_count = 1;
 	} else {
@@ -90,7 +90,7 @@ static void __cc33xx_spi_unlock(struct cc33xx_spi_glue *glue)
 	glue->lock_count--;
 	if (!glue->lock_count){
 		glue->locking_pid = 0;
-		spi_bus_unlock(to_spi_device(glue->dev)->master);
+		spi_bus_unlock(to_spi_device(glue->dev)->controller);
 	}
 }
 
@@ -682,3 +682,4 @@ MODULE_LICENSE("GPL");
 MODULE_AUTHOR("Luciano Coelho <coelho@ti.com>");
 MODULE_AUTHOR("Juuso Oikarinen <juuso.oikarinen@nokia.com>");
 MODULE_ALIAS("spi:cc33xx");
+MODULE_DESCRIPTION("TI CC33XX SPI helpers");

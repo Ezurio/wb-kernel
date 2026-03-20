@@ -1128,7 +1128,7 @@ int reg_reload_regdb(void)
 	else if (cfg80211_driver_regdb_path != NULL)
 		p_path = cfg80211_driver_regdb_path;
 
-	err = request_firmware(&fw, "regulatory.db", &reg_pdev->dev);
+	err = request_firmware(&fw, p_path, &reg_fdev->dev);
 	if (err)
 		return err;
 
@@ -1220,7 +1220,7 @@ int regulatory_load_regdb(const char * regdb_path)
 	pr_info("Loading driver specified regulatory database %s\n",
 		cfg80211_driver_regdb_path);
 
-	err = request_firmware(&fw, cfg80211_driver_regdb_path, &reg_pdev->dev);
+	err = request_firmware(&fw, cfg80211_driver_regdb_path, &reg_fdev->dev);
 	if (err) {
 		pr_err("failed to load %s: %d\n", cfg80211_driver_regdb_path, err);
 		goto out;

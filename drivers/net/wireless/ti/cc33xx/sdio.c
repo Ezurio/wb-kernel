@@ -645,3 +645,4 @@ MODULE_PARM_DESC(dump, "Enable sdio read/write dumps.");
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("Luciano Coelho <coelho@ti.com>");
 MODULE_AUTHOR("Juuso Oikarinen <juuso.oikarinen@nokia.com>");
+MODULE_DESCRIPTION("TI CC33XX SDIO helpers");
