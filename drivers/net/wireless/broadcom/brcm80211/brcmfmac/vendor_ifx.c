@@ -1278,7 +1278,7 @@ int ifx_cfg80211_vndr_cmds_str(struct wiphy *wiphy, struct wireless_dev *wdev,
 	u32 jhash_key;
 	int ret = 0, idx_str = 0, idx_val = 0;
 	unsigned long val;
-	char *cmd_str;
+	char cmd_str[VNDR_CMD_STR_NUM][VNDR_CMD_STR_MAX_LEN];
 	long cmd_val[VNDR_CMD_VAL_NUM];
 	char *tok = NULL, *buf = NULL;
 
@@ -1286,12 +1286,7 @@ int ifx_cfg80211_vndr_cmds_str(struct wiphy *wiphy, struct wireless_dev *wdev,
 	vif = container_of(wdev, struct brcmf_cfg80211_vif, wdev);
 	ifp = vif->ifp;
 
-	cmd_str = kzalloc(VNDR_CMD_STR_NUM * VNDR_CMD_STR_MAX_LEN, GFP_KERNEL);
-	if (!cmd_str) {
-		brcmf_err("Failed to allocate memory for cmd_str\n");
-		return -ENOMEM;
-	}
-
+	memset(cmd_str, '\0', VNDR_CMD_STR_NUM * VNDR_CMD_STR_MAX_LEN * sizeof(char));
 	memset(cmd_val, -1, VNDR_CMD_VAL_NUM * sizeof(*cmd_val));
 
 	while (idx_str < VNDR_CMD_STR_NUM && idx_val < VNDR_CMD_VAL_NUM &&
@@ -1311,7 +1306,6 @@ int ifx_cfg80211_vndr_cmds_str(struct wiphy *wiphy, struct wireless_dev *wdev,
 				tok = tok + 2;/* Skip past 0x */
 				if (strlen(tok) % 2 != 0) {
 					brcmf_err("Data invalid format. Even length required\n");
-					kfree(cmd_str);
 					return -EINVAL;
 				}
 				while (*tok != '\0') {
@@ -1319,7 +1313,6 @@ int ifx_cfg80211_vndr_cmds_str(struct wiphy *wiphy, struct wireless_dev *wdev,
 
 					if (idx_val >= VNDR_CMD_VAL_NUM) {
 						brcmf_err("pkt header hex length exceeded\n");
-						kfree(cmd_str);
 						return -EINVAL;
 					}
 					memcpy(num, tok, 2);
@@ -1328,7 +1321,6 @@ int ifx_cfg80211_vndr_cmds_str(struct wiphy *wiphy, struct wireless_dev *wdev,
 						cmd_val[idx_val] = val;
 					} else {
 						brcmf_err("Invalid hex pkt data\n");
-						kfree(cmd_str);
 						return -EINVAL;
 					}
 					tok += 2;
@@ -1337,7 +1329,6 @@ int ifx_cfg80211_vndr_cmds_str(struct wiphy *wiphy, struct wireless_dev *wdev,
 				cmd_val[idx_val] = ' ';
 			} else {
 				brcmf_err("Failed to parse hex token\n");
-				kfree(cmd_str);
 				return -EINVAL;
 			}
 		} else if (strnlen(tok, VNDR_CMD_STR_MAX_LEN) <= VNDR_CMD_STR_MAX_LEN) {
@@ -1345,13 +1336,11 @@ int ifx_cfg80211_vndr_cmds_str(struct wiphy *wiphy, struct wireless_dev *wdev,
 			idx_str++;
 		} else {
 			brcmf_err("Failed to parse token\n");
-			kfree(cmd_str);
 			return -EINVAL;
 		}
 	}
 	if (idx_str >= VNDR_CMD_STR_NUM || idx_val >= VNDR_CMD_VAL_NUM) {
 		brcmf_err("CMD parameter limit exceeded\n");
-		kfree(cmd_str);
 		return -EINVAL;
 	}
 	/* Run the user cmd string input via Jenkins hash to pass and search the entry in
@@ -1373,7 +1362,6 @@ int ifx_cfg80211_vndr_cmds_str(struct wiphy *wiphy, struct wireless_dev *wdev,
 		}
 	}
 
-	kfree(cmd_str);
 	return ret;
 }
 
