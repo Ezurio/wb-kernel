@@ -958,9 +958,7 @@ int brcmf_p2p_scan_prep(struct wiphy *wiphy,
 		/* override .run_escan() callback. */
 		cfg->escan_info.run = brcmf_p2p_run_escan;
 	}
-	err = brcmf_vif_set_mgmt_ie(vif, BRCMF_VNDR_IE_PRBREQ_FLAG,
-				    request->ie, request->ie_len);
-	return err;
+	return 0;
 }
 
 
@@ -1613,12 +1611,12 @@ static s32 brcmf_p2p_tx_action_frame(struct brcmf_if *ifp,
 		memcpy(&af_params_v2->action_frame, &af_params->action_frame,
 		       sizeof(af_params_v2->action_frame));
 
-		err = brcmf_fil_bsscfg_data_set(vif->ifp, "actframe", af_params_v2,
+		err = brcmf_fil_bsscfg_data_set(ifp, "actframe", af_params_v2,
 						sizeof(*af_params_v2));
 		kfree(af_params_v2);
 	} else {
 		/* set actframe iovar with af_params */
-		err = brcmf_fil_bsscfg_data_set(vif->ifp, "actframe", af_params,
+		err = brcmf_fil_bsscfg_data_set(ifp, "actframe", af_params,
 						sizeof(*af_params));
 	}
 
