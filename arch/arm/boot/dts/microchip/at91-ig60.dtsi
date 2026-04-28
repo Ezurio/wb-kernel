@@ -111,9 +111,6 @@
 };
 
 &pioA {
-	pinctrl-names = "default";
-	pinctrl-0 = <&pinctrl_gpio_misc>;
-
 	gpio-line-names =
 		"", "", "", "", "", "", "", "lte_on",		/* 0-7 */
 		"card_detect1", "lte_status", "card_detect2", "", "", "", "", "",	/* 8-15 */
@@ -130,6 +127,9 @@
 };
 
 &pinctrl {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_gpio_misc>;
+
 	board {
 		pinctrl_mmc0_cd: mmc0_cd {
 			atmel,pins =
