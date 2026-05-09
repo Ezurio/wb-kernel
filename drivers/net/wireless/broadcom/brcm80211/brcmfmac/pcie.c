@@ -3414,7 +3414,7 @@ static const struct dev_pm_ops brcmf_pciedrvr_pm = {
 		CY_PCIE_VENDOR_ID_CYPRESS, dev_id, \
 		PCI_ANY_ID, PCI_ANY_ID, \
 		PCI_CLASS_NETWORK_OTHER << 8, 0xffff00, \
-		BRCMF_FWVENDOR_ ## fw_vend \
+		BRCMF_DRVDATA_ ## fw_vend \
 	}
 
 static const struct pci_device_id brcmf_pcie_devid_table[] = {
