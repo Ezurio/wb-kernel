@@ -12,5 +12,4 @@
 int wlcore_sysfs_init(struct cc33xx *wl);
 void wlcore_sysfs_free(struct cc33xx *wl);
 
-
 #endif /* __SYSFS_H__ */

@@ -15,7 +15,7 @@
 /* Wireless Driver Version */
 #define MAJOR_VERSION 	1
 #define MINOR_VERSION 	7
-#define API_VERSION 	0
+#define API_VERSION 	2
 #define BUILD_VERSION	239
 
 
@@ -68,6 +68,12 @@ struct cc33xx_stats {
 	unsigned long fw_stats_next_update;
 	unsigned int retry_count;
 	unsigned int excessive_retries;
+};
+
+struct cc33xx_wowlan_search {
+	bool enabled;
+	int filter_count;
+	struct cc33xx_rx_filter *active_filters[CC33XX_MAX_RX_FILTERS];
 };
 
 struct cc33xx {
@@ -227,6 +233,9 @@ struct cc33xx {
 	 */
 
 	bool keep_device_power;
+
+	/* WoWLAN search pattern state */
+	struct cc33xx_wowlan_search wowlan_search;
 	
 	/*
 	 * AP-mode - links indexed by HLID. The global and broadcast links

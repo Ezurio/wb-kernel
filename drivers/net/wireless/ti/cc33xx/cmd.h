@@ -84,6 +84,7 @@ int cmd_set_bd_addr(struct cc33xx *wl, u8 *bd_addr);
 int cmd_get_device_info(struct cc33xx *wl, u8 *info_buffer, size_t buffer_len);
 int cmd_download_container_chunk(struct cc33xx *wl, u8 *chunk,
 				 size_t chunk_len, bool is_last_chunk);
+int cc33xx_cmd_cqm_rssi_config(struct cc33xx *wl, struct cc33xx_vif *wlvif, bool enable, s8 threshold, u8 hysteresis);
 
 
 enum cc33xx_cmd {
@@ -145,6 +146,10 @@ enum cc33xx_cmd {
 	CMD_SET_BD_ADDR = 38,
   	CMD_BLE_COMMANDS = 39,
 	CMD_SET_PS_MODE = 40,
+	// RESERVED = 41,
+	// RESERVED = 42,
+	// RESERVED = 43,
+	CMD_CQM_RSSI_CONFIG = 44,
 
 	CMD_LAST_SUPPORTED_COMMAND,
 
@@ -752,6 +757,15 @@ struct cc33xx_cmd_container_download {
 struct cc33xx_cmd_get_device_info {
 	struct cc33xx_cmd_header header;
 	u8 device_info[700];
+} __packed;
+
+struct cc33xx_cmd_cqm_rssi_config {
+    struct cc33xx_cmd_header header;
+
+    u8 role_id;
+    u8 enable;
+    s8 threshold_dbm;
+	u8 hysteresis_db;
 } __packed;
 
 
