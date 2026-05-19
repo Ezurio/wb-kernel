@@ -51,7 +51,7 @@ MODULE_PARM_DESC(regdomain, "Regulatory domain/country code");
 
 static int brcmf_enable_6ghz_master;
 module_param_named(enable_6ghz_master, brcmf_enable_6ghz_master, int, 0400);
-MODULE_PARM_DESC(roamoff, "Enable master mode support in 6G band");
+MODULE_PARM_DESC(enable_6ghz_master, "Enable master mode support in 6G band");
 
 /* Debug level configuration. See debug.h for bits, sysfs modifiable */
 int brcmf_msg_level;
