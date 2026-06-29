@@ -2003,7 +2003,7 @@ static int __maybe_unused cc33xx_op_suspend(struct ieee80211_hw *hw,
 	struct cc33xx *wl = hw->priv;
 	struct cc33xx_vif *wlvif;
 	unsigned long flags;
-	int ret;
+	int ret = 0;
 
 	cc33xx_debug(DEBUG_MAC80211, "mac80211 suspend wow=%d", !!wow);
 	WARN_ON(!wow && !cc33xx_is_wowlan_search_enabled(wl));

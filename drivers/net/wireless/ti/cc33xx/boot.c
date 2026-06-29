@@ -195,7 +195,7 @@ static int wait_for_boot_irq(struct cc33xx *wl, u32 boot_irq_mask,
 
 static int download_container(struct cc33xx *wl, u8 *container, size_t len)
 {
-	int ret;
+	int ret = 0;
 	u8 *current_transfer;
 	size_t current_transfer_size;
 	u8 *const container_end = container + len;	

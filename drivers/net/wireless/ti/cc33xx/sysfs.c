@@ -110,7 +110,7 @@ static ssize_t regdomain_txControl_param_store(struct device *dev,
 {
 	struct cc33xx *cc = dev_get_drvdata(dev);
 	struct acx_phy_regdomain_tx_control_params params;
-	int ret;
+	int ret = 0;
 	char* buffer;
 	char * pToken;
 	int converted_token = 0;
