@@ -39,7 +39,7 @@ struct cc33xx_cmd_dfs_radar_debug {
 #define MAX_VERSIONS_EXTENDED_LEN	256
 
 static
-int cc33xx_cmd_radar_detection_debug(struct cc33xx *wl, u8 channel)
+int cc33xx_cmd_radar_detection_debug(struct cc33xx *cc, u8 channel)
 {
 	struct cc33xx_cmd_dfs_radar_debug *cmd;
 	int ret = 0;
@@ -53,7 +53,7 @@ int cc33xx_cmd_radar_detection_debug(struct cc33xx *wl, u8 channel)
 
 	cmd->channel = channel;
 
-	ret = cc33xx_cmd_send(wl, CMD_DFS_RADAR_DETECTION_DEBUG,
+	ret = cc33xx_cmd_send(cc, CMD_DFS_RADAR_DETECTION_DEBUG,
 			      cmd, sizeof(*cmd), 0);
 	if (ret < 0) {
 		cc33xx_error("failed to send radar detection debug command");
@@ -68,7 +68,7 @@ out_free:
 static ssize_t conf_read(struct file *file, char __user *user_buf,
 			 size_t count, loff_t *ppos)
 {
-	struct cc33xx *wl = file->private_data;
+	struct cc33xx *cc = file->private_data;
 	struct cc33xx_conf_header header;
 	char *buf, *pos;
 	size_t len;
@@ -88,16 +88,12 @@ static ssize_t conf_read(struct file *file, char __user *user_buf,
 
 	header.checksum	= 0;
 
-	mutex_lock(&wl->mutex);
+	mutex_lock(&cc->mutex);
 
 	pos = buf;
-	// Copy current conf struct contents
-	memcpy(pos, &wl->conf, sizeof(wl->conf));
-	
-	// Overwite header portion with fixed values
-	memcpy(pos, &header, sizeof(header));
+	memcpy(pos, &cc->conf, sizeof(cc->conf));
 
-	mutex_unlock(&wl->mutex);
+	mutex_unlock(&cc->mutex);
 
 	ret = simple_read_from_buffer(user_buf, count, ppos, buf, len);
 
@@ -115,13 +111,13 @@ static ssize_t clear_fw_stats_write(struct file *file,
 				    const char __user *user_buf,
 				    size_t count, loff_t *ppos)
 {
-	struct cc33xx *wl = file->private_data;
+	struct cc33xx *cc = file->private_data;
 
-	mutex_lock(&wl->mutex);
+	mutex_lock(&cc->mutex);
 
-	cc33xx_acx_clear_statistics(wl);
+	cc33xx_acx_clear_statistics(cc);
 
-	mutex_unlock(&wl->mutex);
+	mutex_unlock(&cc->mutex);
 
 	return count;
 }
@@ -136,7 +132,7 @@ static ssize_t radar_detection_write(struct file *file,
 				     const char __user *user_buf,
 				     size_t count, loff_t *ppos)
 {
-	struct cc33xx *wl = file->private_data;
+	struct cc33xx *cc = file->private_data;
 	int ret;
 	u8 channel;
 
@@ -146,17 +142,17 @@ static ssize_t radar_detection_write(struct file *file,
 		return -EINVAL;
 	}
 
-	mutex_lock(&wl->mutex);
+	mutex_lock(&cc->mutex);
 
-	if (unlikely(wl->state != WLCORE_STATE_ON))
+	if (unlikely(cc->state != CC33XX_STATE_ON))
 		goto out;
 
-	ret = cc33xx_cmd_radar_detection_debug(wl, channel);
+	ret = cc33xx_cmd_radar_detection_debug(cc, channel);
 	if (ret < 0)
 		count = ret;
 
 out:
-	mutex_unlock(&wl->mutex);
+	mutex_unlock(&cc->mutex);
 	return count;
 }
 
@@ -170,7 +166,7 @@ static ssize_t dynamic_fw_traces_write(struct file *file,
 				       const char __user *user_buf,
 				       size_t count, loff_t *ppos)
 {
-	struct cc33xx *wl = file->private_data;
+	struct cc33xx *cc = file->private_data;
 	unsigned long value;
 	int ret;
 
@@ -178,16 +174,16 @@ static ssize_t dynamic_fw_traces_write(struct file *file,
 	if (ret < 0)
 		return ret;
 
-	wl->dynamic_fw_traces = value;
+	cc->dynamic_fw_traces = value;
 	return count;
 }
 
 static ssize_t dynamic_fw_traces_read(struct file *file, char __user *userbuf,
 				      size_t count, loff_t *ppos)
 {
-	struct cc33xx *wl = file->private_data;
+	struct cc33xx *cc = file->private_data;
 	return cc33xx_format_buffer(userbuf, count, ppos,
-				    "%d\n", wl->dynamic_fw_traces);
+				    "%d\n", cc->dynamic_fw_traces);
 }
 
 static const struct file_operations dynamic_fw_traces_ops = {
@@ -202,7 +198,7 @@ static ssize_t radar_debug_mode_write(struct file *file,
 				      const char __user *user_buf,
 				      size_t count, loff_t *ppos)
 {
-	struct cc33xx *wl = file->private_data;
+	struct cc33xx *cc = file->private_data;
 	struct cc33xx_vif *wlvif;
 	unsigned long value;
 	int ret;
@@ -219,21 +215,21 @@ static ssize_t radar_debug_mode_write(struct file *file,
 		return -EINVAL;
 	}
 
-	mutex_lock(&wl->mutex);
+	mutex_lock(&cc->mutex);
 
-	wl->radar_debug_mode = value;
+	cc->radar_debug_mode = value;
 
-	if (unlikely(wl->state != WLCORE_STATE_ON))
+	if (unlikely(cc->state != CC33XX_STATE_ON))
 		goto out;
 
-	cc33xx_for_each_wlvif_ap(wl, wlvif) {
-		wlcore_cmd_generic_cfg(wl, wlvif,
-				       WLCORE_CFG_FEATURE_RADAR_DEBUG,
-				       wl->radar_debug_mode, 0);
+	cc33xx_for_each_wlvif_ap(cc, wlvif) {
+		cc33xx_cmd_generic_cfg(cc, wlvif,
+				       CC33XX_CFG_FEATURE_RADAR_DEBUG,
+				       cc->radar_debug_mode, 0);
 	}
 
 out:
-	mutex_unlock(&wl->mutex);
+	mutex_unlock(&cc->mutex);
 	return count;
 }
 
@@ -241,10 +237,10 @@ static ssize_t radar_debug_mode_read(struct file *file,
 				     char __user *userbuf,
 				     size_t count, loff_t *ppos)
 {
-	struct cc33xx *wl = file->private_data;
+	struct cc33xx *cc = file->private_data;
 
 	return cc33xx_format_buffer(userbuf, count, ppos,
-				    "%d\n", wl->radar_debug_mode);
+				    "%d\n", cc->radar_debug_mode);
 }
 
 static const struct file_operations radar_debug_mode_ops = {
@@ -254,12 +250,12 @@ static const struct file_operations radar_debug_mode_ops = {
 	.llseek = default_llseek,
 };
 
-static inline void cc33xx_debugfs_add_files_helper(struct cc33xx *wl, struct dentry *moddir)
+static inline void cc33xx_debugfs_add_files_helper(struct cc33xx *cc, struct dentry *moddir)
 {
 	DEBUGFS_ADD(radar_debug_mode, moddir);
 }
 #else
-static inline void cc33xx_debugfs_add_files_helper(struct cc33xx *wl, struct dentry *moddir) {}
+static inline void cc33xx_debugfs_add_files_helper(struct cc33xx *cc, struct dentry *moddir) {}
 #endif /* CFG80211_CERTIFICATION_ONUS */
 
 
@@ -278,40 +274,40 @@ int cc33xx_format_buffer(char __user *userbuf, size_t count,
 	return simple_read_from_buffer(userbuf, count, ppos, buf, res);
 }
 
-void cc33xx_debugfs_update_stats(struct cc33xx *wl)
+void cc33xx_debugfs_update_stats(struct cc33xx *cc)
 {
 	bool update_needed;
 
-	mutex_lock(&wl->mutex);
+	mutex_lock(&cc->mutex);
 
-	if (unlikely(wl->state != WLCORE_STATE_ON))
+	if (unlikely(cc->state != CC33XX_STATE_ON))
 		goto out;
 
-	update_needed = time_after(jiffies, wl->stats.fw_stats_next_update);
+	update_needed = time_after(jiffies, cc->stats.fw_stats_next_update);
 
-	if (!wl->plt && update_needed) {
-		cc33xx_acx_statistics(wl, wl->stats.fw_stats);
+	if (!cc->plt && update_needed) {
+		cc33xx_acx_statistics(cc, cc->stats.fw_stats);
 
-		wl->stats.fw_stats_next_update = 
+		cc->stats.fw_stats_next_update = 
 			jiffies + msecs_to_jiffies(CC33XX_DEBUGFS_STATS_LIFETIME);
 	}
 
 out:
-	mutex_unlock(&wl->mutex);
+	mutex_unlock(&cc->mutex);
 }
 
-DEBUGFS_READONLY_FILE(retry_count, "%u", wl->stats.retry_count);
-DEBUGFS_READONLY_FILE(excessive_retries, "%u", wl->stats.excessive_retries);
+DEBUGFS_READONLY_FILE(retry_count, "%u", cc->stats.retry_count);
+DEBUGFS_READONLY_FILE(excessive_retries, "%u", cc->stats.excessive_retries);
 
 static ssize_t tx_queue_len_read(struct file *file, char __user *userbuf,
 				 size_t count, loff_t *ppos)
 {
-	struct cc33xx *wl = file->private_data;
+	struct cc33xx *cc = file->private_data;
 	u32 queue_len;
 	char buf[20];
 	int res;
 
-	queue_len = cc33xx_tx_total_queue_count(wl);
+	queue_len = cc33xx_tx_total_queue_count(cc);
 
 	res = scnprintf(buf, sizeof(buf), "%u\n", queue_len);
 	return simple_read_from_buffer(userbuf, count, ppos, buf, res);
@@ -330,17 +326,17 @@ static const struct file_operations tx_queue_len_ops = {
 				      char __user *user_buf,		\
 				      size_t count, loff_t *ppos)	\
 	{								\
-	struct cc33xx *wl = file->private_data;				\
+	struct cc33xx *cc = file->private_data;				\
 	return cc33xx_format_buffer(user_buf, count,			\
 				    ppos, "%d\n",			\
-				    wl->conf.host_conf.conf_sub_struct.param);	\
+				    cc->conf.host_conf.conf_sub_struct.param);	\
 	}								\
 									\
 	static ssize_t param##_write(struct file *file,			\
 				     const char __user *user_buf,	\
 				     size_t count, loff_t *ppos)	\
 	{								\
-	struct cc33xx *wl = file->private_data;				\
+	struct cc33xx *cc = file->private_data;				\
 	unsigned long value;						\
 	int ret;							\
 									\
@@ -355,12 +351,12 @@ static const struct file_operations tx_queue_len_ops = {
 		return -ERANGE;						\
 	}								\
 									\
-	mutex_lock(&wl->mutex);						\
-	wl->conf.host_conf.conf_sub_struct.param = value;		\
+	mutex_lock(&cc->mutex);						\
+	cc->conf.host_conf.conf_sub_struct.param = value;		\
 									\
-	write_handler_locked(wl, value, write_handler_arg);		\
+	write_handler_locked(cc, value, write_handler_arg);		\
 									\
-	mutex_unlock(&wl->mutex);					\
+	mutex_unlock(&cc->mutex);					\
 	return count;							\
 	}								\
 									\
@@ -374,8 +370,8 @@ static const struct file_operations tx_queue_len_ops = {
 static ssize_t gpio_power_read(struct file *file, char __user *user_buf,
 			       size_t count, loff_t *ppos)
 {
-	struct cc33xx *wl = file->private_data;
-	bool state = test_bit(CC33XX_FLAG_GPIO_POWER, &wl->flags);
+	struct cc33xx *cc = file->private_data;
+	bool state = test_bit(CC33XX_FLAG_GPIO_POWER, &cc->flags);
 
 	int res;
 	char buf[10];
@@ -388,7 +384,7 @@ static ssize_t gpio_power_read(struct file *file, char __user *user_buf,
 static ssize_t gpio_power_write(struct file *file, const char __user *user_buf,
 				size_t count, loff_t *ppos)
 {
-	struct cc33xx *wl = file->private_data;
+	struct cc33xx *cc = file->private_data;
 	unsigned long value;
 	int ret;
 
@@ -398,14 +394,14 @@ static ssize_t gpio_power_write(struct file *file, const char __user *user_buf,
 		return -EINVAL;
 	}
 
-	mutex_lock(&wl->mutex);
+	mutex_lock(&cc->mutex);
 
 	if (value)
-		cc33xx_power_on(wl);
+		cc33xx_power_on(cc);
 	else
-		cc33xx_power_off(wl);
+		cc33xx_power_off(cc);
 
-	mutex_unlock(&wl->mutex);
+	mutex_unlock(&cc->mutex);
 	return count;
 }
 
@@ -420,11 +416,11 @@ static ssize_t start_recovery_write(struct file *file,
 				    const char __user *user_buf,
 				    size_t count, loff_t *ppos)
 {
-	struct cc33xx *wl = file->private_data;
+	struct cc33xx *cc = file->private_data;
 
-	mutex_lock(&wl->mutex);
-	cc33xx_queue_recovery_work(wl);
-	mutex_unlock(&wl->mutex);
+	mutex_lock(&cc->mutex);
+	cc33xx_queue_recovery_work(cc);
+	mutex_unlock(&cc->mutex);
 
 	return count;
 }
@@ -439,16 +435,16 @@ static ssize_t dynamic_ps_timeout_read(struct file *file,
 					      char __user *user_buf,
 					      size_t count, loff_t *ppos)
 {
-	struct cc33xx *wl = file->private_data;
+	struct cc33xx *cc = file->private_data;
 	return cc33xx_format_buffer(user_buf, count, ppos, "%d\n",
-				    wl->conf.host_conf.conn.dynamic_ps_timeout);
+				    cc->conf.host_conf.conn.dynamic_ps_timeout);
 }
 
 static ssize_t dynamic_ps_timeout_write(struct file *file,
 					const char __user *user_buf,
 					size_t count, loff_t *ppos)
 {
-	struct cc33xx *wl = file->private_data;
+	struct cc33xx *cc = file->private_data;
 	struct cc33xx_vif *wlvif;
 	unsigned long value;
 	int ret;
@@ -464,23 +460,23 @@ static ssize_t dynamic_ps_timeout_write(struct file *file,
 		return -ERANGE;
 	}
 
-	mutex_lock(&wl->mutex);
+	mutex_lock(&cc->mutex);
 
-	wl->conf.host_conf.conn.dynamic_ps_timeout = value;
+	cc->conf.host_conf.conn.dynamic_ps_timeout = value;
 
-	if (unlikely(wl->state != WLCORE_STATE_ON))
+	if (unlikely(cc->state != CC33XX_STATE_ON))
 		goto out;
 
 	/* In case we're already in PSM, trigger it again to set new timeout
 	 * immediately without waiting for re-association
 	 */
 
-	cc33xx_for_each_wlvif_sta(wl, wlvif) {
-		cc33xx_ps_set_mode(wl, wlvif, STATION_AUTO_PS_MODE);
+	cc33xx_for_each_wlvif_sta(cc, wlvif) {
+		cc33xx_ps_set_mode(cc, wlvif, STATION_AUTO_PS_MODE);
 	}
 
 out:
-	mutex_unlock(&wl->mutex);
+	mutex_unlock(&cc->mutex);
 	return count;
 }
 
@@ -494,15 +490,15 @@ static const struct file_operations dynamic_ps_timeout_ops = {
 static ssize_t ps_mode_read(struct file *file, char __user *user_buf,
 				     size_t count, loff_t *ppos)
 {
-	struct cc33xx *wl = file->private_data;
+	struct cc33xx *cc = file->private_data;
 	return cc33xx_format_buffer(user_buf, count, ppos, "%d\n",
-				    wl->conf.mac.ps_mode);
+				    cc->conf.mac.ps_mode);
 }
 
 static ssize_t ps_mode_write(struct file *file, const char __user *user_buf,
 			       size_t count, loff_t *ppos)
 {
-	struct cc33xx *wl = file->private_data;
+	struct cc33xx *cc = file->private_data;
 	struct cc33xx_vif *wlvif;
 	unsigned long value;
 	int ret;
@@ -518,26 +514,26 @@ static ssize_t ps_mode_write(struct file *file, const char __user *user_buf,
 		return -ERANGE;
 	}
 
-	mutex_lock(&wl->mutex);
+	mutex_lock(&cc->mutex);
 
-	if (wl->conf.mac.ps_mode == value)
+	if (cc->conf.mac.ps_mode == value)
 		goto out;
 
-	wl->conf.mac.ps_mode = value;
+	cc->conf.mac.ps_mode = value;
 
-	if (unlikely(wl->state != WLCORE_STATE_ON))
+	if (unlikely(cc->state != CC33XX_STATE_ON))
 		goto out;
 
 	/* In case we're already in PSM, trigger it again to switch mode
 	 * immediately without waiting for re-association
 	 */
 
-	cc33xx_for_each_wlvif_sta(wl, wlvif) {
-		cc33xx_ps_set_mode(wl, wlvif, value);
+	cc33xx_for_each_wlvif_sta(cc, wlvif) {
+		cc33xx_ps_set_mode(cc, wlvif, value);
 	}
 
 out:
-	mutex_unlock(&wl->mutex);
+	mutex_unlock(&cc->mutex);
 	return count;
 }
 
@@ -552,16 +548,16 @@ static ssize_t split_scan_timeout_read(struct file *file,
 					      char __user *user_buf,
 					      size_t count, loff_t *ppos)
 {
-	struct cc33xx *wl = file->private_data;
+	struct cc33xx *cc = file->private_data;
 	return cc33xx_format_buffer(user_buf, count, ppos, "%d\n",
-				    wl->conf.host_conf.scan.split_scan_timeout / 1000);
+				    cc->conf.host_conf.scan.split_scan_timeout / 1000);
 }
 
 static ssize_t split_scan_timeout_write(struct file *file,
 					const char __user *user_buf,
 					size_t count, loff_t *ppos)
 {
-	struct cc33xx *wl = file->private_data;
+	struct cc33xx *cc = file->private_data;
 	unsigned long value;
 	int ret;
 
@@ -574,11 +570,11 @@ static ssize_t split_scan_timeout_write(struct file *file,
 	if (value == 0)
 		cc33xx_info("split scan will be disabled");
 
-	mutex_lock(&wl->mutex);
+	mutex_lock(&cc->mutex);
 
-	wl->conf.host_conf.scan.split_scan_timeout = value * 1000;
+	cc->conf.host_conf.scan.split_scan_timeout = value * 1000;
 
-	mutex_unlock(&wl->mutex);
+	mutex_unlock(&cc->mutex);
 	return count;
 }
 
@@ -593,7 +589,7 @@ static const struct file_operations split_scan_timeout_ops = {
 
 #define DRIVER_STATE_PRINT(x, fmt)   \
 	(res += scnprintf(buf + res, DRIVER_STATE_BUF_LEN - res,\
-			  #x " = " fmt "\n", wl->x))
+			  #x " = " fmt "\n", cc->x))
 
 #define DRIVER_STATE_PRINT_GENERIC(x, fmt, args...)   \
 	(res += scnprintf(buf + res, DRIVER_STATE_BUF_LEN - res,\
@@ -608,7 +604,7 @@ static const struct file_operations split_scan_timeout_ops = {
 static ssize_t driver_state_read(struct file *file, char __user *user_buf,
 				 size_t count, loff_t *ppos)
 {
-	struct cc33xx *wl = file->private_data;
+	struct cc33xx *cc = file->private_data;
 	int res = 0;
 	ssize_t ret;
 	char *buf;
@@ -619,9 +615,9 @@ static ssize_t driver_state_read(struct file *file, char __user *user_buf,
 	if (!buf)
 		return -ENOMEM;
 
-	mutex_lock(&wl->mutex);
+	mutex_lock(&cc->mutex);
 
-	cc33xx_for_each_wlvif_sta(wl, wlvif) {
+	cc33xx_for_each_wlvif_sta(cc, wlvif) {
 		if (!test_bit(WLVIF_FLAG_STA_ASSOCIATED, &wlvif->flags))
 			continue;
 
@@ -629,7 +625,7 @@ static ssize_t driver_state_read(struct file *file, char __user *user_buf,
 					   wlvif->p2p ? "P2P-CL" : "STA");
 	}
 
-	cc33xx_for_each_wlvif_ap(wl, wlvif)
+	cc33xx_for_each_wlvif_ap(cc, wlvif)
 		DRIVER_STATE_PRINT_GENERIC(channel, "%d (%s)", wlvif->channel,
 					   wlvif->p2p ? "P2P-GO" : "AP");
 
@@ -656,7 +652,7 @@ static ssize_t driver_state_read(struct file *file, char __user *user_buf,
 	DRIVER_STATE_PRINT_HEX(quirks);
 	/* TODO: ref_clock and tcxo_clock were moved to wl12xx priv */
 
-	mutex_unlock(&wl->mutex);
+	mutex_unlock(&cc->mutex);
 
 	ret = simple_read_from_buffer(user_buf, count, ppos, buf, res);
 	kfree(buf);
@@ -680,7 +676,7 @@ static const struct file_operations driver_state_ops = {
 static ssize_t vifs_state_read(struct file *file, char __user *user_buf,
 			       size_t count, loff_t *ppos)
 {
-	struct cc33xx *wl = file->private_data;
+	struct cc33xx *cc = file->private_data;
 	struct cc33xx_vif *wlvif;
 	int ret, res = 0;
 	const int buf_size = 4096;
@@ -691,7 +687,7 @@ static ssize_t vifs_state_read(struct file *file, char __user *user_buf,
 	if (!buf)
 		return -ENOMEM;
 
-	mutex_lock(&wl->mutex);
+	mutex_lock(&cc->mutex);
 
 #define VIF_STATE_PRINT(x, fmt)				\
 	(res += scnprintf(buf + res, buf_size - res,	\
@@ -713,7 +709,7 @@ static ssize_t vifs_state_read(struct file *file, char __user *user_buf,
 				 #x " = %s\n", tmp_buf);	\
 	} while (0)
 
-	cc33xx_for_each_wlvif(wl, wlvif) {
+	cc33xx_for_each_wlvif(cc, wlvif) {
 		VIF_STATE_PRINT_INT(role_id);
 		VIF_STATE_PRINT_INT(bss_type);
 		VIF_STATE_PRINT_LHEX(flags);
@@ -774,7 +770,7 @@ static ssize_t vifs_state_read(struct file *file, char __user *user_buf,
 #undef VIF_STATE_PRINT_NSTR
 #undef VIF_STATE_PRINT
 
-	mutex_unlock(&wl->mutex);
+	mutex_unlock(&cc->mutex);
 
 	ret = simple_read_from_buffer(user_buf, count, ppos, buf, res);
 	kfree(buf);
@@ -800,12 +796,12 @@ enum {
 static ssize_t dtim_interval_read(struct file *file, char __user *user_buf,
 				  size_t count, loff_t *ppos)
 {
-	struct cc33xx *wl = file->private_data;
+	struct cc33xx *cc = file->private_data;
 	u8 value;
 
-	if (wl->conf.core.wake_up_event == CONF_WAKE_UP_EVENT_DTIM ||
-	    wl->conf.core.wake_up_event == CONF_WAKE_UP_EVENT_N_DTIM)
-		value = wl->conf.core.listen_interval;
+	if (cc->conf.core.wake_up_event == CONF_WAKE_UP_EVENT_DTIM ||
+	    cc->conf.core.wake_up_event == CONF_WAKE_UP_EVENT_N_DTIM)
+		value = cc->conf.core.listen_interval;
 	else
 		value = 0;
 
@@ -816,7 +812,7 @@ static ssize_t dtim_interval_write(struct file *file,
 				   const char __user *user_buf,
 				   size_t count, loff_t *ppos)
 {
-	struct cc33xx *wl = file->private_data;
+	struct cc33xx *cc = file->private_data;
 	struct cc33xx_vif *wlvif = NULL;
 	struct ieee80211_sub_if_data *sdata = NULL;
 	struct ieee80211_vif *vif = NULL;
@@ -834,25 +830,25 @@ static ssize_t dtim_interval_write(struct file *file,
 		return -ERANGE;
 	}
 
-	mutex_lock(&wl->mutex);
+	mutex_lock(&cc->mutex);
 
-	wl->conf.core.listen_interval = value;
+	cc->conf.core.listen_interval = value;
 
 	if (value == 1)
-		wl->conf.core.wake_up_event = CONF_WAKE_UP_EVENT_DTIM;
+		cc->conf.core.wake_up_event = CONF_WAKE_UP_EVENT_DTIM;
 	else
-		wl->conf.core.wake_up_event = CONF_WAKE_UP_EVENT_N_DTIM;
+		cc->conf.core.wake_up_event = CONF_WAKE_UP_EVENT_N_DTIM;
 
-	cc33xx_for_each_wlvif_sta(wl, wlvif) {
-		if (!wlcore_is_p2p_mgmt(wlvif))
+	cc33xx_for_each_wlvif_sta(cc, wlvif) {
+		if (!cc33xx_is_p2p_mgmt(wlvif))
 		{
 			vif = cc33xx_wlvif_to_vif(wlvif);
 			sdata = vif_to_sdata(vif);
 			cc33xx_debug(DEBUG_CMD, "Setting LSI on interface %s",
 						sdata->name);
-			ret = cc33xx_acx_wake_up_conditions(wl, wlvif,
-						wl->conf.core.wake_up_event,
-						wl->conf.core.listen_interval);
+			ret = cc33xx_acx_wake_up_conditions(cc, wlvif,
+						cc->conf.core.wake_up_event,
+						cc->conf.core.listen_interval);
 			if (ret < 0) {
 				vif = cc33xx_wlvif_to_vif(wlvif);
 				sdata = vif_to_sdata(vif);
@@ -862,7 +858,7 @@ static ssize_t dtim_interval_write(struct file *file,
 			}
 		}
 	}
-	mutex_unlock(&wl->mutex);
+	mutex_unlock(&cc->mutex);
 	return count;
 }
 
@@ -877,12 +873,12 @@ static ssize_t suspend_dtim_interval_read(struct file *file,
 					  char __user *user_buf,
 					  size_t count, loff_t *ppos)
 {
-	struct cc33xx *wl = file->private_data;
+	struct cc33xx *cc = file->private_data;
 	u8 value;
 
-	if (wl->conf.core.suspend_wake_up_event == CONF_WAKE_UP_EVENT_DTIM ||
-	    wl->conf.core.suspend_wake_up_event == CONF_WAKE_UP_EVENT_N_DTIM)
-		value = wl->conf.core.suspend_listen_interval;
+	if (cc->conf.core.suspend_wake_up_event == CONF_WAKE_UP_EVENT_DTIM ||
+	    cc->conf.core.suspend_wake_up_event == CONF_WAKE_UP_EVENT_N_DTIM)
+		value = cc->conf.core.suspend_listen_interval;
 	else
 		value = 0;
 
@@ -893,7 +889,7 @@ static ssize_t suspend_dtim_interval_write(struct file *file,
 					   const char __user *user_buf,
 					   size_t count, loff_t *ppos)
 {
-	struct cc33xx *wl = file->private_data;
+	struct cc33xx *cc = file->private_data;
 	unsigned long value;
 	int ret;
 
@@ -908,16 +904,16 @@ static ssize_t suspend_dtim_interval_write(struct file *file,
 		return -ERANGE;
 	}
 
-	mutex_lock(&wl->mutex);
+	mutex_lock(&cc->mutex);
 
-	wl->conf.core.suspend_listen_interval = value;
+	cc->conf.core.suspend_listen_interval = value;
 	/* for some reason there are different event types for 1 and >1 */
 	if (value == 1)
-		wl->conf.core.suspend_wake_up_event = CONF_WAKE_UP_EVENT_DTIM;
+		cc->conf.core.suspend_wake_up_event = CONF_WAKE_UP_EVENT_DTIM;
 	else
-		wl->conf.core.suspend_wake_up_event = CONF_WAKE_UP_EVENT_N_DTIM;
+		cc->conf.core.suspend_wake_up_event = CONF_WAKE_UP_EVENT_N_DTIM;
 
-	mutex_unlock(&wl->mutex);
+	mutex_unlock(&cc->mutex);
 	return count;
 }
 
@@ -931,12 +927,12 @@ static const struct file_operations suspend_dtim_interval_ops = {
 static ssize_t beacon_interval_read(struct file *file, char __user *user_buf,
 				    size_t count, loff_t *ppos)
 {
-	struct cc33xx *wl = file->private_data;
+	struct cc33xx *cc = file->private_data;
 	u8 value;
 
-	if (wl->conf.core.wake_up_event == CONF_WAKE_UP_EVENT_BEACON ||
-	    wl->conf.core.wake_up_event == CONF_WAKE_UP_EVENT_N_BEACONS)
-		value = wl->conf.core.listen_interval;
+	if (cc->conf.core.wake_up_event == CONF_WAKE_UP_EVENT_BEACON ||
+	    cc->conf.core.wake_up_event == CONF_WAKE_UP_EVENT_N_BEACONS)
+		value = cc->conf.core.listen_interval;
 	else
 		value = 0;
 
@@ -947,7 +943,7 @@ static ssize_t beacon_interval_write(struct file *file,
 				     const char __user *user_buf,
 				     size_t count, loff_t *ppos)
 {
-	struct cc33xx *wl = file->private_data;
+	struct cc33xx *cc = file->private_data;
 	unsigned long value;
 	int ret;
 
@@ -962,20 +958,20 @@ static ssize_t beacon_interval_write(struct file *file,
 		return -ERANGE;
 	}
 
-	mutex_lock(&wl->mutex);
+	mutex_lock(&cc->mutex);
 
-	wl->conf.core.listen_interval = value;
+	cc->conf.core.listen_interval = value;
 	/* for some reason there are different event types for 1 and >1 */
 	if (value == 1)
-		wl->conf.core.wake_up_event = CONF_WAKE_UP_EVENT_BEACON;
+		cc->conf.core.wake_up_event = CONF_WAKE_UP_EVENT_BEACON;
 	else
-		wl->conf.core.wake_up_event = CONF_WAKE_UP_EVENT_N_BEACONS;
+		cc->conf.core.wake_up_event = CONF_WAKE_UP_EVENT_N_BEACONS;
 
 	/*
 	 * we don't reconfigure ACX_WAKE_UP_CONDITIONS now, so it will only
 	 * take effect on the next time we enter psm.
 	 */
-	mutex_unlock(&wl->mutex);
+	mutex_unlock(&cc->mutex);
 	return count;
 }
 
@@ -990,7 +986,7 @@ static ssize_t beacon_filtering_write(struct file *file,
 				      const char __user *user_buf,
 				      size_t count, loff_t *ppos)
 {
-	struct cc33xx *wl = file->private_data;
+	struct cc33xx *cc = file->private_data;
 	struct cc33xx_vif *wlvif;
 	unsigned long value;
 	int ret;
@@ -1001,13 +997,13 @@ static ssize_t beacon_filtering_write(struct file *file,
 		return -EINVAL;
 	}
 
-	mutex_lock(&wl->mutex);
+	mutex_lock(&cc->mutex);
 
-	cc33xx_for_each_wlvif(wl, wlvif) {
-		ret = cc33xx_acx_beacon_filter_opt(wl, wlvif, !!value);
+	cc33xx_for_each_wlvif(cc, wlvif) {
+		ret = cc33xx_acx_beacon_filter_opt(cc, wlvif, !!value);
 	}
 
-	mutex_unlock(&wl->mutex);
+	mutex_unlock(&cc->mutex);
 	return count;
 }
 
@@ -1020,12 +1016,12 @@ static const struct file_operations beacon_filtering_ops = {
 static ssize_t fw_stats_raw_read(struct file *file, char __user *userbuf,
 				 size_t count, loff_t *ppos)
 {
-	struct cc33xx *wl = file->private_data;
+	struct cc33xx *cc = file->private_data;
 
-	cc33xx_debugfs_update_stats(wl);
+	cc33xx_debugfs_update_stats(cc);
 
 	return simple_read_from_buffer(userbuf, count, ppos,
-				       wl->stats.fw_stats,
+				       cc->stats.fw_stats,
 				       sizeof(struct cc33xx_acx_statistics));
 }
 
@@ -1038,15 +1034,15 @@ static const struct file_operations fw_stats_raw_ops = {
 static ssize_t sleep_auth_read(struct file *file, char __user *user_buf,
 			       	      size_t count, loff_t *ppos)
 {
-	struct cc33xx *wl = file->private_data;
+	struct cc33xx *cc = file->private_data;
 	return cc33xx_format_buffer(user_buf, count, ppos, "%d\n",
-				    wl->sleep_auth);
+				    cc->sleep_auth);
 }
 
 static ssize_t sleep_auth_write(struct file *file, const char __user *user_buf,
 				size_t count, loff_t *ppos)
 {
-	struct cc33xx *wl = file->private_data;
+	struct cc33xx *cc = file->private_data;
 	unsigned long value;
 	int ret;
 
@@ -1062,20 +1058,20 @@ static ssize_t sleep_auth_write(struct file *file, const char __user *user_buf,
 		return -ERANGE;
 	}
 
-	mutex_lock(&wl->mutex);
+	mutex_lock(&cc->mutex);
 
-	wl->conf.host_conf.conn.sta_sleep_auth = value;
+	cc->conf.host_conf.conn.sta_sleep_auth = value;
 
-	if (unlikely(wl->state != WLCORE_STATE_ON)) {
+	if (unlikely(cc->state != CC33XX_STATE_ON)) {
 		/* this will show up on "read" in case we are off */
-		wl->sleep_auth = value;
+		cc->sleep_auth = value;
 		goto out;
 	}
 
-	cc33xx_acx_sleep_auth(wl, value);
+	cc33xx_acx_sleep_auth(cc, value);
 
 out:
-	mutex_unlock(&wl->mutex);
+	mutex_unlock(&cc->mutex);
 	return count;
 }
 
@@ -1090,23 +1086,23 @@ static const struct file_operations sleep_auth_ops = {
 static ssize_t ble_enable_read(struct file *file, char __user *user_buf,
 			       	      size_t count, loff_t *ppos)
 {
-	struct cc33xx *wl = file->private_data;
+	struct cc33xx *cc = file->private_data;
 	return cc33xx_format_buffer(user_buf, count, ppos, "%d\n",
-				    wl->ble_enable);
+				    cc->ble_enable);
 }
 
 static ssize_t ble_enable_write(struct file *file, const char __user *user_buf,
 				size_t count, loff_t *ppos)
 {
-	struct cc33xx *wl = file->private_data;
+	struct cc33xx *cc = file->private_data;
 	unsigned long value;
 	int ret;
 
 	ret = kstrtoul_from_user(user_buf, count, 0, &value);
 
-	if (value == wl->ble_enable) {
+	if (value == cc->ble_enable) {
 		
-		cc33xx_warning("ble_enable is already %d",wl->ble_enable);
+		cc33xx_warning("ble_enable is already %d",cc->ble_enable);
 		return -EINVAL;
 	}
 
@@ -1116,17 +1112,18 @@ static ssize_t ble_enable_write(struct file *file, const char __user *user_buf,
 		return -EINVAL;
 	}
 
-	mutex_lock(&wl->mutex);
+	mutex_lock(&cc->mutex);
 
-	if (unlikely(wl->state != WLCORE_STATE_ON)) {
+	if (unlikely(cc->state != CC33XX_STATE_ON)) {
 		/* this will show up on "read" in case we are off */
-		wl->ble_enable = value;
+		cc33xx_info("cc33xx state is not ON, setting ble_enable to 0.");
+		cc->ble_enable = 0;
 		goto out;
 	}
 
-	cc33xx_ble_enable(wl, value);
+	cc33xx_ble_enable(cc, value);
 out:
-	mutex_unlock(&wl->mutex);
+	mutex_unlock(&cc->mutex);
 	return count;
 }
 
@@ -1144,22 +1141,22 @@ static const struct file_operations ble_enable_ops = {
 static ssize_t fw_crash_log_read(struct file *file, char __user *user_buf,
 			       	      size_t count, loff_t *ppos)
 {
-	struct cc33xx *wl = file->private_data;
+	struct cc33xx *cc = file->private_data;
 	size_t len;
 	int ret;
 
-	if(wl->fw_crash_logs == NULL)
+	if(cc->fw_crash_logs == NULL)
 	{
 		return 0;
 	}
 
 	len = CC33XX_MAX_FW_LOGS_BUFFER_SIZE;
 
-	mutex_lock(&wl->mutex);
+	mutex_lock(&cc->mutex);
 
-	ret = simple_read_from_buffer(user_buf, count, ppos, wl->fw_crash_logs, len);
+	ret = simple_read_from_buffer(user_buf, count, ppos, cc->fw_crash_logs, len);
 
-	mutex_unlock(&wl->mutex);
+	mutex_unlock(&cc->mutex);
 
 	return ret;
 }
@@ -1180,7 +1177,7 @@ static ssize_t set_tsf_read(struct file *file, char __user *user_buf,
 static ssize_t set_tsf_write(struct file *file, const char __user *user_buf,
 			     size_t count, loff_t *ppos)
 {
-	struct cc33xx *wl = file->private_data;
+	struct cc33xx *cc = file->private_data;
 	unsigned long long value;
 	int ret;
 
@@ -1190,16 +1187,16 @@ static ssize_t set_tsf_write(struct file *file, const char __user *user_buf,
 		return -EINVAL;
 	}
 
-	mutex_lock(&wl->mutex);
+	mutex_lock(&cc->mutex);
 	
-	if (unlikely(wl->state != WLCORE_STATE_ON)) {
+	if (unlikely(cc->state != CC33XX_STATE_ON)) {
 		goto out;
 	}
 
-	cc33xx_acx_set_tsf(wl, value); 
+	cc33xx_acx_set_tsf(cc, value); 
 
 out:
-	mutex_unlock(&wl->mutex);
+	mutex_unlock(&cc->mutex);
 	return count;
 }
 
@@ -1214,19 +1211,19 @@ static const struct file_operations set_tsf_ops = {
 static ssize_t twt_action_read(struct file *file, char __user *user_buf,
 			       size_t count, loff_t *ppos)
 {
-	struct cc33xx *wl = file->private_data;
+	struct cc33xx *cc = file->private_data;
 
 	return cc33xx_format_buffer(user_buf, count, ppos, "%d %d %d %d %d\n", 
-				wl->min_wake_duration_usec,
-				wl->min_wake_interval_mantissa, wl->min_wake_interval_exponent,
-				wl->max_wake_interval_mantissa, wl->max_wake_interval_exponent);
+				cc->min_wake_duration_usec,
+				cc->min_wake_interval_mantissa, cc->min_wake_interval_exponent,
+				cc->max_wake_interval_mantissa, cc->max_wake_interval_exponent);
 }
 
 static ssize_t twt_action_write(struct file *file,
 				const char __user *user_buf,
 				size_t count, loff_t *ppos)
 {
-	struct cc33xx *wl = file->private_data;
+	struct cc33xx *cc = file->private_data;
 
 	int min_wake_duration_usec = 0;
 	int min_wake_interval_mantissa = 0;
@@ -1285,9 +1282,9 @@ static ssize_t twt_action_write(struct file *file,
 		}
 	}
 
-	mutex_lock(&wl->mutex);
+	mutex_lock(&cc->mutex);
 	
-	if (unlikely(wl->state != WLCORE_STATE_ON)) {
+	if (unlikely(cc->state != CC33XX_STATE_ON)) {
 		goto out;
 	}
 
@@ -1324,7 +1321,7 @@ static ssize_t twt_action_write(struct file *file,
 				goto out;
 			}
 
-			ret = cc33xx_acx_twt_setup(wl, min_wake_duration_usec, 
+			ret = cc33xx_acx_twt_setup(cc, min_wake_duration_usec, 
 					min_wake_interval_mantissa, min_wake_interval_exponent, 
 					max_wake_interval_mantissa, max_wake_interval_exponent, 
 					valid_params);
@@ -1334,18 +1331,18 @@ static ssize_t twt_action_write(struct file *file,
 		}
 		case TWT_ACTION_SUSPEND: {
 
-			ret = cc33xx_acx_twt_suspend(wl);
+			ret = cc33xx_acx_twt_suspend(cc);
 			break;
 		}
 		case TWT_ACTION_RESUME: {
 
-			ret = cc33xx_acx_twt_resume(wl);
+			ret = cc33xx_acx_twt_resume(cc);
 
 			break;
 		}
 		case TWT_ACTION_TERMINATE: {
 
-			ret = cc33xx_acx_twt_terminate(wl);
+			ret = cc33xx_acx_twt_terminate(cc);
 
 			break;
 		}
@@ -1358,7 +1355,7 @@ static ssize_t twt_action_write(struct file *file,
 
 
 out:
-	mutex_unlock(&wl->mutex);
+	mutex_unlock(&cc->mutex);
 	return count;
 }
 
@@ -1402,15 +1399,15 @@ static const struct file_operations dev_mem_ops = {
 static ssize_t fw_logger_read(struct file *file, char __user *user_buf,
 				     size_t count, loff_t *ppos)
 {
-	struct cc33xx *wl = file->private_data;
+	struct cc33xx *cc = file->private_data;
 	return cc33xx_format_buffer(user_buf, count, ppos, "%d\n",
-				    wl->conf.host_conf.fwlog.output);
+				    cc->conf.host_conf.fwlog.output);
 }
 
 static ssize_t fw_logger_write(struct file *file, const char __user *user_buf,
 			       size_t count, loff_t *ppos)
 {
-	struct cc33xx *wl = file->private_data;
+	struct cc33xx *cc = file->private_data;
 	unsigned long value;
 	int ret;
 
@@ -1425,19 +1422,19 @@ static ssize_t fw_logger_write(struct file *file, const char __user *user_buf,
 		return -ERANGE;
 	}
 
-	if (wl->conf.host_conf.fwlog.output == 0) {
+	if (cc->conf.host_conf.fwlog.output == 0) {
 		cc33xx_warning("invalid operation - fw logger disabled by default, "
 			       "please change mode via wlconf");
 		return -EINVAL;
 	}
 
-	mutex_lock(&wl->mutex);
+	mutex_lock(&cc->mutex);
 
-	wl->conf.host_conf.fwlog.output = value;
+	cc->conf.host_conf.fwlog.output = value;
 
-	cc33xx_cmd_config_fwlog(wl);
+	cc33xx_cmd_config_fwlog(cc);
 
-	mutex_unlock(&wl->mutex);
+	mutex_unlock(&cc->mutex);
 	return count;
 }
 
@@ -1452,16 +1449,16 @@ static ssize_t antenna_select_read(struct file *file,
 					  char __user *user_buf,
 					  size_t count, loff_t *ppos)
 {
-	struct cc33xx *wl = file->private_data;
+	struct cc33xx *cc = file->private_data;
 	return cc33xx_format_buffer(user_buf, count, ppos, "%d\n",
-				    wl->antenna_selection);
+				    cc->antenna_selection);
 }
 
 static ssize_t antenna_select_write(struct file *file, 
 				    const char __user *user_buf,
 				    size_t count, loff_t *ppos)
 {
-	struct cc33xx *wl = file->private_data;
+	struct cc33xx *cc = file->private_data;
 	int ret;
 	u8 selection;
 
@@ -1476,19 +1473,19 @@ static ssize_t antenna_select_write(struct file *file,
 		return -ERANGE;
 	}
 
-	mutex_lock(&wl->mutex);
+	mutex_lock(&cc->mutex);
 	
-	if (unlikely(wl->state != WLCORE_STATE_ON)) {
+	if (unlikely(cc->state != CC33XX_STATE_ON)) {
 		goto out;
 	}
 
-	ret = cc33xx_acx_set_antenna_select(wl, selection); 
+	ret = cc33xx_acx_set_antenna_select(cc, selection); 
 	if (ret == 0) {
-		wl->antenna_selection = selection;
+		cc->antenna_selection = selection;
 	}
 
 out:
-	mutex_unlock(&wl->mutex);
+	mutex_unlock(&cc->mutex);
 	return count;
 }
 
@@ -1503,9 +1500,9 @@ static ssize_t get_versions_extended_read(struct file *file,
 					  char __user *user_buf,
 					  size_t count, loff_t *ppos)
 {
-	struct cc33xx *wl = file->private_data;
-	struct driver_versions *driver_ver = &wl->all_versions.driver_ver;
-	struct cc33xx_acx_fw_versions *fw_ver = wl->all_versions.fw_ver;
+	struct cc33xx *cc = file->private_data;
+	struct driver_versions *driver_ver = &cc->all_versions.driver_ver;
+	struct cc33xx_acx_fw_versions *fw_ver = cc->all_versions.fw_ver;
 
 	char all_versions_str [MAX_VERSIONS_EXTENDED_LEN];
 
@@ -1534,9 +1531,9 @@ static const struct file_operations get_versions_extended_ops = {
 static ssize_t get_versions_read(struct file *file, char __user *user_buf,
 				 size_t count, loff_t *ppos)
 {
-	struct cc33xx *wl = file->private_data;
-	struct driver_versions *driver_ver = &wl->all_versions.driver_ver;
-	struct cc33xx_acx_fw_versions *fw_ver = wl->all_versions.fw_ver;
+	struct cc33xx *cc = file->private_data;
+	struct driver_versions *driver_ver = &cc->all_versions.driver_ver;
+	struct cc33xx_acx_fw_versions *fw_ver = cc->all_versions.fw_ver;
 
 	char all_versions_str [MAX_VERSIONS_LEN];
 
@@ -1560,18 +1557,18 @@ static ssize_t trigger_fw_assert_write(struct file *file,
 				       const char __user *user_buf,
 				       size_t count, loff_t *ppos)
 {
-	struct cc33xx *wl = file->private_data;
+	struct cc33xx *cc = file->private_data;
 
-	mutex_lock(&wl->mutex);
+	mutex_lock(&cc->mutex);
 	
-	if (unlikely(wl->state != WLCORE_STATE_ON)) {
+	if (unlikely(cc->state != CC33XX_STATE_ON)) {
 		goto out;
 	}
 	
-	cc33xx_acx_trigger_fw_assert(wl);
+	cc33xx_acx_trigger_fw_assert(cc);
 
 out:
-	mutex_unlock(&wl->mutex);
+	mutex_unlock(&cc->mutex);
 	return count;
 }
 
@@ -1584,16 +1581,16 @@ static const struct file_operations trigger_fw_assert_ops = {
 static ssize_t burst_mode_read(struct file *file, char __user *user_buf,
 				      size_t count, loff_t *ppos)
 {
-	struct cc33xx *wl = file->private_data;
+	struct cc33xx *cc = file->private_data;
 
 	return cc33xx_format_buffer(user_buf, count, ppos,
-				    "%d\n", wl->burst_disable);
+				    "%d\n", cc->burst_disable);
 }
 
 static ssize_t burst_mode_write(struct file *file, const char __user *user_buf,
 				size_t count, loff_t *ppos)
 {
-	struct cc33xx *wl = file->private_data;
+	struct cc33xx *cc = file->private_data;
 	int ret;
 	u8 burst_disable;
 
@@ -1608,19 +1605,19 @@ static ssize_t burst_mode_write(struct file *file, const char __user *user_buf,
 		return -ERANGE;
 	}
 
-	mutex_lock(&wl->mutex);
+	mutex_lock(&cc->mutex);
 	
-	if (unlikely(wl->state != WLCORE_STATE_ON)) {
+	if (unlikely(cc->state != CC33XX_STATE_ON)) {
 		goto out;
 	}
 
-	ret = cc33xx_acx_burst_mode_cfg(wl, burst_disable); 
+	ret = cc33xx_acx_burst_mode_cfg(cc, burst_disable); 
 	if (ret == 0) {
-		wl->burst_disable = burst_disable;
+		cc->burst_disable = burst_disable;
 	}
 
 out:
-	mutex_unlock(&wl->mutex);
+	mutex_unlock(&cc->mutex);
 	return count;
 }
 
@@ -1641,7 +1638,7 @@ static const struct file_operations burst_mode_ops = {
 static ssize_t coex_statistics_read(struct file *file, char __user *user_buf,
 				    size_t count, loff_t *ppos)
 {
-	struct cc33xx *wl = file->private_data;
+	struct cc33xx *cc = file->private_data;
 	struct cc33xx_acx_coex_statistics *coex_stats_cmd;
 	char coex_statistics_str[MAX_COEX_STATISTICS_LEN];
 	struct cc33xx_coex_stat_and_entities *coex_stat_ent;
@@ -1658,7 +1655,7 @@ static ssize_t coex_statistics_read(struct file *file, char __user *user_buf,
 	coex_stat_ent = &coex_stats_cmd->coex_stat;
 	coex_stats = &coex_stat_ent->coex_statistics;
 
-	ret = cc33xx_cmd_interrogate(wl, READ_COEX_STATISTICS, coex_stats_cmd,
+	ret = cc33xx_cmd_interrogate(cc, READ_COEX_STATISTICS, coex_stats_cmd,
 				     sizeof(struct cc33xx_acx_coex_statistics),
 				     sizeof(struct cc33xx_acx_coex_statistics));
 
@@ -1738,7 +1735,7 @@ static ssize_t coex_statistics_write(struct file *file,
 				     const char __user *user_buf,
 				     size_t count, loff_t *ppos)
 {
-	struct cc33xx *wl = file->private_data;
+	struct cc33xx *cc = file->private_data;
 	unsigned int value;
 	struct cc33xx_acx_coex_statistics_cfg *pCoexStatictics;
 	int ret;
@@ -1761,9 +1758,9 @@ static ssize_t coex_statistics_write(struct file *file,
 
 	pCoexStatictics->coex_statictics = value;
 
-	mutex_lock(&wl->mutex);
+	mutex_lock(&cc->mutex);
 
-	ret = cc33xx_cmd_configure(wl, START_COEX_STATISTICS_CFG,
+	ret = cc33xx_cmd_configure(cc, START_COEX_STATISTICS_CFG,
 				   pCoexStatictics,
 				   sizeof(struct cc33xx_acx_coex_statistics_cfg));
 	if (ret < 0) {
@@ -1775,7 +1772,7 @@ out_free:
 	kfree(pCoexStatictics);
 
 out:
-	mutex_unlock(&wl->mutex);
+	mutex_unlock(&cc->mutex);
 
 	return count;
 }
@@ -1790,10 +1787,10 @@ static const struct file_operations coex_statistics_ops = {
 static ssize_t antenna_diversity_enable_read(struct file *file, 
 					char __user *user_buf, size_t count, loff_t *ppos)
 {
-	struct cc33xx *wl = file->private_data;
+	struct cc33xx *cc = file->private_data;
 	int ret;
 
-	ret = cc33xx_acx_get_antenna_diversity_status(wl);
+	ret = cc33xx_acx_get_antenna_diversity_status(cc);
 	if (ret < 0) {
 		cc33xx_warning("diversity status read failed");
 		return ret;
@@ -1805,7 +1802,7 @@ static ssize_t antenna_diversity_enable_read(struct file *file,
 static ssize_t antenna_diversity_enable_write(struct file *file, 
 				const char __user *user_buf, size_t count, loff_t *ppos)
 {
-	struct cc33xx *wl = file->private_data;
+	struct cc33xx *cc = file->private_data;
 	int ret;
 	u8 diversity_enable;
 
@@ -1815,7 +1812,7 @@ static ssize_t antenna_diversity_enable_write(struct file *file,
 		return -EINVAL;
 	}
 
-	if ((wl->conf.phy.num_of_antennas == 1) && (diversity_enable == 1)) {
+	if ((cc->conf.phy.num_of_antennas == 1) && (diversity_enable == 1)) {
 		cc33xx_warning("diversity cannot be enabled when only one antenna on board");
 		return -EINVAL;
 	}
@@ -1825,16 +1822,16 @@ static ssize_t antenna_diversity_enable_write(struct file *file,
 		return -ERANGE;
 	}
 
-	mutex_lock(&wl->mutex);
+	mutex_lock(&cc->mutex);
 	
-	if (unlikely(wl->state != WLCORE_STATE_ON)) {
+	if (unlikely(cc->state != CC33XX_STATE_ON)) {
 		goto out;
 	}
 
-	cc33xx_acx_set_antenna_diversity_status(wl, diversity_enable); 
+	cc33xx_acx_set_antenna_diversity_status(cc, diversity_enable); 
 
 out:
-	mutex_unlock(&wl->mutex);
+	mutex_unlock(&cc->mutex);
 	return count;
 }
 
@@ -1848,11 +1845,11 @@ static const struct file_operations antenna_diversity_enable_ops = {
 static ssize_t antenna_diversity_set_rssi_threshold_read(struct file *file, char __user *user_buf,
 			       	size_t count, loff_t *ppos)
 {
-	struct cc33xx *wl = file->private_data;
+	struct cc33xx *cc = file->private_data;
 	int ret;
 	s8 threshold;
 
-	ret = cc33xx_acx_antenna_diversity_get_rssi_threshold(wl, &threshold);
+	ret = cc33xx_acx_antenna_diversity_get_rssi_threshold(cc, &threshold);
 	if (ret < 0) {
 		cc33xx_warning("diversity rssi threshold read failed");
 		return ret;
@@ -1864,7 +1861,7 @@ static ssize_t antenna_diversity_set_rssi_threshold_read(struct file *file, char
 static ssize_t antenna_diversity_set_rssi_threshold_write(struct file *file, 
 				const char __user *user_buf, size_t count, loff_t *ppos)
 {
-	struct cc33xx *wl = file->private_data;
+	struct cc33xx *cc = file->private_data;
 	int ret;
 	s8 rssi_threshold;
 
@@ -1874,16 +1871,16 @@ static ssize_t antenna_diversity_set_rssi_threshold_write(struct file *file,
 		return -EINVAL;
 	}
 
-	mutex_lock(&wl->mutex);
+	mutex_lock(&cc->mutex);
 	
-	if (unlikely(wl->state != WLCORE_STATE_ON)) {
+	if (unlikely(cc->state != CC33XX_STATE_ON)) {
 		goto out;
 	}
 
-	cc33xx_acx_antenna_diversity_set_rssi_threshold(wl, rssi_threshold); 
+	cc33xx_acx_antenna_diversity_set_rssi_threshold(cc, rssi_threshold); 
 
 out:
-	mutex_unlock(&wl->mutex);
+	mutex_unlock(&cc->mutex);
 	return count;
 }
 
@@ -1897,10 +1894,10 @@ static const struct file_operations antenna_diversity_set_rssi_threshold_ops = {
 static ssize_t antenna_diversity_select_default_antenna_read(struct file *file, char __user *user_buf,
 			       	size_t count, loff_t *ppos)
 {
-	struct cc33xx *wl = file->private_data;
+	struct cc33xx *cc = file->private_data;
 	int ret;
 
-	ret = cc33xx_acx_antenna_diversity_get_default_antenna(wl);
+	ret = cc33xx_acx_antenna_diversity_get_default_antenna(cc);
 	if (ret < 0) {
 		cc33xx_warning("diversity default antenna read failed");
 		return ret;
@@ -1912,7 +1909,7 @@ static ssize_t antenna_diversity_select_default_antenna_read(struct file *file, 
 static ssize_t antenna_diversity_select_default_antenna_write(struct file *file, 
 				const char __user *user_buf, size_t count, loff_t *ppos)
 {
-	struct cc33xx *wl = file->private_data;
+	struct cc33xx *cc = file->private_data;
 	int ret;
 	u8 default_antenna;
 
@@ -1922,7 +1919,7 @@ static ssize_t antenna_diversity_select_default_antenna_write(struct file *file,
 		return -EINVAL;
 	}
 
-	if (wl->conf.phy.num_of_antennas == 1) {
+	if (cc->conf.phy.num_of_antennas == 1) {
 		cc33xx_warning("cannot change default antenna in board with only one antenna");
 		return -EINVAL;
 	}
@@ -1932,16 +1929,16 @@ static ssize_t antenna_diversity_select_default_antenna_write(struct file *file,
 		return -ERANGE;
 	}
 
-	mutex_lock(&wl->mutex);
+	mutex_lock(&cc->mutex);
 	
-	if (unlikely(wl->state != WLCORE_STATE_ON)) {
+	if (unlikely(cc->state != CC33XX_STATE_ON)) {
 		goto out;
 	}
 
-	cc33xx_acx_antenna_diversity_select_default_antenna(wl, default_antenna);
+	cc33xx_acx_antenna_diversity_select_default_antenna(cc, default_antenna);
 
 out:
-	mutex_unlock(&wl->mutex);
+	mutex_unlock(&cc->mutex);
 	return count;
 }
 
@@ -1953,7 +1950,7 @@ static const struct file_operations antenna_diversity_select_default_antenna_ops
 };
 
 static
-int cc33xx_debugfs_add_files(struct cc33xx *wl,
+int cc33xx_debugfs_add_files(struct cc33xx *cc,
 			     struct dentry *rootdir)
 {
 	struct dentry *stats, *moddir;
@@ -2002,46 +1999,46 @@ int cc33xx_debugfs_add_files(struct cc33xx *wl,
 
 	DEBUGFS_ADD(conf, moddir);
 	DEBUGFS_ADD(radar_detection, moddir);
-	cc33xx_debugfs_add_files_helper(wl, moddir);
+	cc33xx_debugfs_add_files_helper(cc, moddir);
 	DEBUGFS_ADD(dynamic_fw_traces, moddir);
 
 	return 0;
 }
 
-void cc33xx_debugfs_reset(struct cc33xx *wl)
+void cc33xx_debugfs_reset(struct cc33xx *cc)
 {
-	if (!wl->stats.fw_stats)
+	if (!cc->stats.fw_stats)
 		return;
 
-	memset(wl->stats.fw_stats, 0, sizeof(struct cc33xx_acx_statistics));
-	wl->stats.retry_count = 0;
-	wl->stats.excessive_retries = 0;
+	memset(cc->stats.fw_stats, 0, sizeof(struct cc33xx_acx_statistics));
+	cc->stats.retry_count = 0;
+	cc->stats.excessive_retries = 0;
 }
 
-int cc33xx_debugfs_init(struct cc33xx *wl)
+int cc33xx_debugfs_init(struct cc33xx *cc)
 {
 	int ret;
 	struct dentry *rootdir;
 
-	rootdir = debugfs_create_dir(KBUILD_MODNAME, wl->hw->wiphy->debugfsdir);
+	rootdir = debugfs_create_dir(KBUILD_MODNAME, cc->hw->wiphy->debugfsdir);
 
-	wl->stats.fw_stats = kzalloc(sizeof(struct cc33xx_acx_statistics),
+	cc->stats.fw_stats = kzalloc(sizeof(struct cc33xx_acx_statistics),
 				     GFP_KERNEL);
-	if (!wl->stats.fw_stats) {
+	if (!cc->stats.fw_stats) {
 		ret = -ENOMEM;
 		goto out_remove;
 	}
 
-	wl->stats.fw_stats_next_update = jiffies;
+	cc->stats.fw_stats_next_update = jiffies;
 
-	ret = cc33xx_debugfs_add_files(wl, rootdir);
+	ret = cc33xx_debugfs_add_files(cc, rootdir);
 	if (ret < 0)
 		goto out_exit;
 
 	goto out;
 
 out_exit:
-	cc33xx_debugfs_exit(wl);
+	cc33xx_debugfs_exit(cc);
 
 out_remove:
 	debugfs_remove_recursive(rootdir);
@@ -2050,8 +2047,8 @@ out:
 	return ret;
 }
 
-void cc33xx_debugfs_exit(struct cc33xx *wl)
+void cc33xx_debugfs_exit(struct cc33xx *cc)
 {
-	kfree(wl->stats.fw_stats);
-	wl->stats.fw_stats = NULL;
+	kfree(cc->stats.fw_stats);
+	cc->stats.fw_stats = NULL;
 }

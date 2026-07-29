@@ -7,7 +7,7 @@
  * Contact: Luciano Coelho <luciano.coelho@nokia.com>
  */
 
-#include "wlcore.h"
+#include "cc33xx.h"
 #include "debug.h"
 #include "cmd.h"
 #include "scan.h"
@@ -16,7 +16,7 @@
 
 
 static void cc33xx_adjust_channels(struct scan_param *scanParam,
-				   struct wlcore_scan_channels *cmd_channels,
+				   struct cc33xx_scan_channels *cmd_channels,
 				   EScanRequestType scan_type)
 {
 	struct conn_scan_ch_info	*ch_info_list;
@@ -78,7 +78,7 @@ static void cc33xx_adjust_channels(struct scan_param *scanParam,
 	dwell_info[band].passive_duration = channel->passive_duration;
 }
 
-static int cc33xx_cmd_build_probe_req(struct cc33xx *wl,
+static int cc33xx_cmd_build_probe_req(struct cc33xx *cc,
 				      struct cc33xx_vif *wlvif, u8 role_id,
 				      u8 scan_type, const u8 *ssid,
 				      size_t ssid_len, const u8 *ie0,
@@ -100,7 +100,7 @@ static int cc33xx_cmd_build_probe_req(struct cc33xx *wl,
 		goto out;
 	}
 
-	skb = ieee80211_probereq_get(wl->hw, vif->addr, ssid,
+	skb = ieee80211_probereq_get(cc->hw, vif->addr, ssid,
 				     ssid_len, ie0_len + ie1_len);
 	if (!skb) {
 		ret = -ENOMEM;
@@ -126,7 +126,7 @@ static int cc33xx_cmd_build_probe_req(struct cc33xx *wl,
 
 	//Katya - temporary workaround - untill scan module is changed
 	usleep_range(10000, 11000);
-	ret = cc33xx_cmd_send(wl, CMD_SET_PROBE_IE, cmd, alloc_size, res_len);
+	ret = cc33xx_cmd_send(cc, CMD_SET_PROBE_IE, cmd, alloc_size, res_len);
 
 	if (ret < 0) {
 		cc33xx_warning("cmd set_template failed: %d", ret);
@@ -146,7 +146,7 @@ static int cc33xx_cmd_build_probe_req(struct cc33xx *wl,
 	return ret;
 }
 
-static void wlcore_started_vifs_iter(void *data, u8 *mac,
+static void cc33xx_started_vifs_iter(void *data, u8 *mac,
 				     struct ieee80211_vif *vif)
 {
 	struct cc33xx_vif *wlvif = cc33xx_vif_to_data(vif);
@@ -165,7 +165,7 @@ static void wlcore_started_vifs_iter(void *data, u8 *mac,
 		break;
 
 	case BSS_TYPE_AP_BSS:
-		if (wlvif->wl->active_sta_count > 0)
+		if (wlvif->cc->active_sta_count > 0)
 			active = true;
 		break;
 
@@ -177,18 +177,18 @@ static void wlcore_started_vifs_iter(void *data, u8 *mac,
 		(*count)++;
 }
 
-static int wlcore_count_started_vifs(struct cc33xx *wl)
+static int cc33xx_count_started_vifs(struct cc33xx *cc)
 {
 	int count = 0;
 
-	ieee80211_iterate_active_interfaces_atomic(wl->hw,
+	ieee80211_iterate_active_interfaces_atomic(cc->hw,
 						IEEE80211_IFACE_ITER_RESUME_ALL,
-						   wlcore_started_vifs_iter,
+						   cc33xx_started_vifs_iter,
 						   &count);
 	return count;
 }
 
-static int wlcore_scan_get_channels(struct cc33xx *wl,
+static int cc33xx_scan_get_channels(struct cc33xx *cc,
 				    struct ieee80211_channel *req_channels[],
 				    u32 n_channels, u32 n_ssids,
 				    struct conn_scan_ch_params *channels,
@@ -206,8 +206,8 @@ static int wlcore_scan_get_channels(struct cc33xx *wl,
 
 	/* configure dwell times according to scan type */
 	if (scan_type == SCAN_TYPE_SEARCH) {
-		struct conf_scan_settings *c = &wl->conf.host_conf.scan;
-		bool active_vif_exists = !!wlcore_count_started_vifs(wl);
+		struct conf_scan_settings *c = &cc->conf.host_conf.scan;
+		bool active_vif_exists = !!cc33xx_count_started_vifs(cc);
 
 		min_dwell_time_active = active_vif_exists ?
 						c->min_dwell_time_active :
@@ -219,7 +219,7 @@ static int wlcore_scan_get_channels(struct cc33xx *wl,
 		dwell_time_dfs = c->dwell_time_dfs;
 	} else {
 		struct conf_sched_scan_settings *c = 
-					&wl->conf.host_conf.sched_scan;
+					&cc->conf.host_conf.sched_scan;
 		u32 delta_per_probe;
 
 		delta_per_probe = (band == NL80211_BAND_5GHZ) ?
@@ -299,40 +299,40 @@ static int wlcore_scan_get_channels(struct cc33xx *wl,
 	return j - start;
 }
 
-static bool wlcore_set_scan_chan_params(struct cc33xx *wl,
-					struct wlcore_scan_channels *cfg,
+static bool cc33xx_set_scan_chan_params(struct cc33xx *cc,
+					struct cc33xx_scan_channels *cfg,
 					struct ieee80211_channel *channels[],
 					u32 n_channels, u32 n_ssids,
 					int scan_type)
 {
 	u8 n_pactive_ch = 0;
 
-	cfg->passive[0] = wlcore_scan_get_channels(wl, channels, n_channels,
+	cfg->passive[0] = cc33xx_scan_get_channels(cc, channels, n_channels,
 						   n_ssids, cfg->channels_2,
 						   NL80211_BAND_2GHZ, false,
 						   true, 0, MAX_CHANNELS_2GHZ,
 						   &n_pactive_ch, scan_type);
 
-	cfg->active[0] = wlcore_scan_get_channels(wl, channels, n_channels,
+	cfg->active[0] = cc33xx_scan_get_channels(cc, channels, n_channels,
 						  n_ssids, cfg->channels_2,
 						  NL80211_BAND_2GHZ, false,
 						  false, cfg->passive[0],
 						  MAX_CHANNELS_2GHZ,
 						  &n_pactive_ch, scan_type);
 	
-	cfg->passive[1] = wlcore_scan_get_channels(wl, channels, n_channels,
+	cfg->passive[1] = cc33xx_scan_get_channels(cc, channels, n_channels,
 						   n_ssids, cfg->channels_5,
 						   NL80211_BAND_5GHZ, false,
 						   true, 0, MAX_CHANNELS_5GHZ,
 						   &n_pactive_ch, scan_type);
 	
-	cfg->dfs = wlcore_scan_get_channels(wl, channels, n_channels, n_ssids,
+	cfg->dfs = cc33xx_scan_get_channels(cc, channels, n_channels, n_ssids,
 					    cfg->channels_5, NL80211_BAND_5GHZ,
 					    true, true, cfg->passive[1],
 					    MAX_CHANNELS_5GHZ, &n_pactive_ch,
 					    scan_type);
 
-	cfg->active[1] = wlcore_scan_get_channels(wl, channels, n_channels,
+	cfg->active[1] = cc33xx_scan_get_channels(cc, channels, n_channels,
 						  n_ssids, cfg->channels_5,
 						  NL80211_BAND_5GHZ, false,
 						  false,
@@ -340,9 +340,6 @@ static bool wlcore_set_scan_chan_params(struct cc33xx *wl,
 						  MAX_CHANNELS_5GHZ,
 						  &n_pactive_ch, scan_type);
 
-	/* 802.11j channels are not supported yet */
-	cfg->passive[2] = 0;
-	cfg->active[2] = 0;
 
 	cfg->passive_active = n_pactive_ch;
 
@@ -353,14 +350,14 @@ static bool wlcore_set_scan_chan_params(struct cc33xx *wl,
 	cc33xx_debug(DEBUG_SCAN, "DFS: %d", cfg->dfs);
 
 	return  cfg->passive[0] || cfg->active[0] || cfg->passive[1] ||
-		cfg->active[1] || cfg->dfs || cfg->passive[2] || cfg->active[2];
+		cfg->active[1] || cfg->dfs;
 }
 
-static int cc33xx_scan_send(struct cc33xx *wl, struct cc33xx_vif *wlvif,
+static int cc33xx_scan_send(struct cc33xx *cc, struct cc33xx_vif *wlvif,
 			    struct cfg80211_scan_request *req)
 {
 	struct cc33xx_cmd_scan_params *cmd;
-	struct wlcore_scan_channels *cmd_channels = NULL;
+	struct cc33xx_scan_channels *cmd_channels = NULL;
 	struct cc33xx_ssid *cmd_ssid;
 	u16 alloc_size;
 	int ret;
@@ -374,7 +371,7 @@ static int cc33xx_scan_send(struct cc33xx *wl, struct cc33xx_vif *wlvif,
 	}
 
 	/* scan on the dev role if the regular one is not started */
-	if (wlcore_is_p2p_mgmt(wlvif))
+	if (cc33xx_is_p2p_mgmt(wlvif))
 		cmd->role_id = wlvif->dev_role_id;
 	else
 		cmd->role_id = wlvif->role_id;
@@ -401,7 +398,7 @@ static int cc33xx_scan_send(struct cc33xx *wl, struct cc33xx_vif *wlvif,
 		goto out;
 	}
 
-	wlcore_set_scan_chan_params(wl, cmd_channels, req->channels,
+	cc33xx_set_scan_chan_params(cc, cmd_channels, req->channels,
 				    req->n_channels, req->n_ssids,
 				    SCAN_TYPE_SEARCH);
 
@@ -418,7 +415,7 @@ static int cc33xx_scan_send(struct cc33xx *wl, struct cc33xx_vif *wlvif,
 				SCAN_SSID_TYPE_HIDDEN : SCAN_SSID_TYPE_PUBLIC;
 	}
 
-    	ret = cc33xx_cmd_build_probe_req(wl, wlvif, cmd->role_id,cmd->scan_type,
+    	ret = cc33xx_cmd_build_probe_req(cc, wlvif, cmd->role_id,cmd->scan_type,
 					 req->ssids ? req->ssids[0].ssid : NULL,
 					 req->ssids ? req->ssids[0].ssid_len :0,
 					 req->ie, req->ie_len, NULL, 0, false);
@@ -429,7 +426,7 @@ static int cc33xx_scan_send(struct cc33xx *wl, struct cc33xx_vif *wlvif,
 	
 	cc33xx_dump(DEBUG_SCAN, "SCAN: ", cmd, alloc_size);
 
-	ret = cc33xx_cmd_send(wl, CMD_SCAN, cmd, alloc_size, 0);
+	ret = cc33xx_cmd_send(cc, CMD_SCAN, cmd, alloc_size, 0);
 	if (ret < 0) {
 		cc33xx_error("SCAN failed");
 		goto out;
@@ -441,7 +438,7 @@ out:
 	return ret;
 }
 
-static int cc33xx_scan_sched_scan_ssid_list(struct cc33xx *wl,
+static int cc33xx_scan_sched_scan_ssid_list(struct cc33xx *cc,
 					    struct cc33xx_vif *wlvif,
 					struct cfg80211_sched_scan_request *req,
 					    struct cc33xx_cmd_ssid_list *cmd)
@@ -534,14 +531,14 @@ out:
 	return 0;
 }
 
-int cc33xx_sched_scan_start(struct cc33xx *wl, struct cc33xx_vif *wlvif,
+int cc33xx_sched_scan_start(struct cc33xx *cc, struct cc33xx_vif *wlvif,
 			    struct cfg80211_sched_scan_request *req,
 			    struct ieee80211_scan_ies *ies)
 {
 	struct cc33xx_cmd_scan_params *cmd;
 	struct cc33xx_cmd_ssid_list *ssid_list;
-	struct wlcore_scan_channels *cmd_channels = NULL;
-	struct conf_sched_scan_settings *c = &wl->conf.host_conf.sched_scan;
+	struct cc33xx_scan_channels *cmd_channels = NULL;
+	struct conf_sched_scan_settings *c = &cc->conf.host_conf.sched_scan;
 	int ret;
 	int n_ssids = 0;
 	int alloc_size = sizeof(*cmd);
@@ -554,7 +551,7 @@ int cc33xx_sched_scan_start(struct cc33xx *wl, struct cc33xx_vif *wlvif,
 		goto out_ssid_free;
 	}
 
- 	n_ssids = cc33xx_scan_sched_scan_ssid_list(wl, wlvif, req, ssid_list);
+ 	n_ssids = cc33xx_scan_sched_scan_ssid_list(cc, wlvif, req, ssid_list);
 	if(n_ssids < 0) {
 		return n_ssids;
 	}
@@ -565,7 +562,7 @@ int cc33xx_sched_scan_start(struct cc33xx *wl, struct cc33xx_vif *wlvif,
 		alloc_size += (n_ssids * sizeof(struct cc33xx_ssid));
 	} else { /* n_ssids > 5 */
 		ssid_list->scan_type = SCAN_REQUEST_CONNECT_PERIODIC_SCAN;
-		ret = cc33xx_cmd_send(wl, CMD_CONNECTION_SCAN_SSID_CFG,
+		ret = cc33xx_cmd_send(cc, CMD_CONNECTION_SCAN_SSID_CFG,
 				      ssid_list, sizeof(*ssid_list), 0);
 		if (ret < 0) {
 			cc33xx_error("cmd sched scan ssid list failed");
@@ -607,7 +604,7 @@ int cc33xx_sched_scan_start(struct cc33xx *wl, struct cc33xx_vif *wlvif,
 	}
 
 	/* configure channels */
-	wlcore_set_scan_chan_params(wl, cmd_channels, req->channels,
+	cc33xx_set_scan_chan_params(cc, cmd_channels, req->channels,
 				    req->n_channels, req->n_ssids,
 				    SCAN_TYPE_PERIODIC);
 	cc33xx_adjust_channels(&cmd->params, cmd_channels, cmd->scan_type);
@@ -623,7 +620,7 @@ int cc33xx_sched_scan_start(struct cc33xx *wl, struct cc33xx_vif *wlvif,
 		     cmd->params.u.periodic.sched_scan_plans[0].iterations,
 		     cmd->params.u.periodic.sched_scan_plans_num);
 
-    	ret = cc33xx_cmd_build_probe_req(wl, wlvif, cmd->role_id,cmd->scan_type,
+    	ret = cc33xx_cmd_build_probe_req(cc, wlvif, cmd->role_id,cmd->scan_type,
 					 req->ssids ? req->ssids[0].ssid : NULL,
 					 req->ssids ? req->ssids[0].ssid_len :0,
 					 ies->ies[NL80211_BAND_2GHZ],
@@ -638,7 +635,7 @@ int cc33xx_sched_scan_start(struct cc33xx *wl, struct cc33xx_vif *wlvif,
 
 	cc33xx_dump(DEBUG_SCAN, "SCAN: ", cmd, alloc_size);
 
-	ret = cc33xx_cmd_send(wl, CMD_SCAN, cmd, alloc_size, 0);
+	ret = cc33xx_cmd_send(cc, CMD_SCAN, cmd, alloc_size, 0);
 	if (ret < 0) {
 		cc33xx_error("SCAN failed");
 		goto out_free;
@@ -654,7 +651,7 @@ out_ssid_free:
 	return ret;
 }
 
-static int __cc33xx_scan_stop(struct cc33xx *wl,
+static int __cc33xx_scan_stop(struct cc33xx *cc,
 			      struct cc33xx_vif *wlvif, u8 scan_type)
 {
     	struct cc33xx_cmd_scan_stop *stop;
@@ -671,7 +668,7 @@ static int __cc33xx_scan_stop(struct cc33xx *wl,
 	stop->role_id = wlvif->role_id;
 	stop->scan_type = scan_type;
 
-	ret = cc33xx_cmd_send(wl, CMD_STOP_SCAN, stop, sizeof(*stop), 0);
+	ret = cc33xx_cmd_send(cc, CMD_STOP_SCAN, stop, sizeof(*stop), 0);
 	if (ret < 0) {
 		cc33xx_error("failed to send sched scan stop command");
 		goto out_free;
@@ -682,73 +679,73 @@ out_free:
 	return ret;
 }
 
-void cc33xx_scan_sched_scan_stop(struct cc33xx *wl,
+void cc33xx_scan_sched_scan_stop(struct cc33xx *cc,
 				 struct cc33xx_vif *wlvif)
 {
-	__cc33xx_scan_stop(wl, wlvif, SCAN_REQUEST_CONNECT_PERIODIC_SCAN);
+	__cc33xx_scan_stop(cc, wlvif, SCAN_REQUEST_CONNECT_PERIODIC_SCAN);
 }
 
 static 
-int cc33xx_scan_start(struct cc33xx *wl, struct cc33xx_vif *wlvif,
+int cc33xx_scan_start(struct cc33xx *cc, struct cc33xx_vif *wlvif,
 		      struct cfg80211_scan_request *req)
 {
-	return cc33xx_scan_send(wl, wlvif, req);
+	return cc33xx_scan_send(cc, wlvif, req);
 }
 
-int cc33xx_scan_stop(struct cc33xx *wl, struct cc33xx_vif *wlvif)
+int cc33xx_scan_stop(struct cc33xx *cc, struct cc33xx_vif *wlvif)
 {
-	return __cc33xx_scan_stop(wl, wlvif, SCAN_REQUEST_ONE_SHOT);
+	return __cc33xx_scan_stop(cc, wlvif, SCAN_REQUEST_ONE_SHOT);
 }
 
 void cc33xx_scan_complete_work(struct work_struct *work)
 {
 	struct delayed_work *dwork;
-	struct cc33xx *wl;
+	struct cc33xx *cc;
 	struct cc33xx_vif *wlvif;
 	struct cfg80211_scan_info info = {
 		.aborted = false,
 	};
 
 	dwork = to_delayed_work(work);
-	wl = container_of(dwork, struct cc33xx, scan_complete_work);
+	cc = container_of(dwork, struct cc33xx, scan_complete_work);
 
 	cc33xx_debug(DEBUG_SCAN, "Scanning complete");
 
-	mutex_lock(&wl->mutex);
+	mutex_lock(&cc->mutex);
 
-	if (unlikely(wl->state != WLCORE_STATE_ON))
+	if (unlikely(cc->state != CC33XX_STATE_ON))
 		goto out;
 
-	if (wl->scan.state == CC33XX_SCAN_STATE_IDLE)
+	if (cc->scan.state == CC33XX_SCAN_STATE_IDLE)
 		goto out;
 
-	wlvif = wl->scan_wlvif;
+	wlvif = cc->scan_wlvif;
 
 	/*
 	 * Rearm the tx watchdog just before idling scan. This
 	 * prevents just-finished scans from triggering the watchdog
 	 */
-	cc33xx_rearm_tx_watchdog_locked(wl);
+	cc33xx_rearm_tx_watchdog_locked(cc);
 
-	wl->scan.state = CC33XX_SCAN_STATE_IDLE;
-	memset(wl->scan.scanned_ch, 0, sizeof(wl->scan.scanned_ch));
-	wl->scan.req = NULL;
-	wl->scan_wlvif = NULL;
+	cc->scan.state = CC33XX_SCAN_STATE_IDLE;
+	memset(cc->scan.scanned_ch, 0, sizeof(cc->scan.scanned_ch));
+	cc->scan.req = NULL;
+	cc->scan_wlvif = NULL;
 
-	if (wl->scan.failed) {
+	if (cc->scan.failed) {
 		cc33xx_info("Scan completed due to error.");
-		cc33xx_queue_recovery_work(wl);
+		cc33xx_queue_recovery_work(cc);
 	}
 
-	wlcore_cmd_regdomain_config_locked(wl);
+	cc33xx_cmd_regdomain_config_locked(cc);
 
-	ieee80211_scan_completed(wl->hw, &info);
+	ieee80211_scan_completed(cc->hw, &info);
 
 out:
-	mutex_unlock(&wl->mutex);
+	mutex_unlock(&cc->mutex);
 }
 
-int wlcore_scan(struct cc33xx *wl, struct ieee80211_vif *vif, const u8 *ssid,
+int cc33xx_scan(struct cc33xx *cc, struct ieee80211_vif *vif, const u8 *ssid,
 		size_t ssid_len, struct cfg80211_scan_request *req)
 {
 	struct cc33xx_vif *wlvif = cc33xx_vif_to_data(vif);
@@ -759,43 +756,43 @@ int wlcore_scan(struct cc33xx *wl, struct ieee80211_vif *vif, const u8 *ssid,
 	 */
 	BUG_ON(req->n_channels > CC33XX_MAX_CHANNELS);
 
-	if (wl->scan.state != CC33XX_SCAN_STATE_IDLE)
+	if (cc->scan.state != CC33XX_SCAN_STATE_IDLE)
 		return -EBUSY;
 
-	wl->scan.state = CC33XX_SCAN_STATE_2GHZ_ACTIVE;
+	cc->scan.state = CC33XX_SCAN_STATE_2GHZ_ACTIVE;
 
 	if (ssid_len && ssid) {
-		wl->scan.ssid_len = ssid_len;
-		memcpy(wl->scan.ssid, ssid, ssid_len);
+		cc->scan.ssid_len = ssid_len;
+		memcpy(cc->scan.ssid, ssid, ssid_len);
 	} else {
-		wl->scan.ssid_len = 0;
+		cc->scan.ssid_len = 0;
 	}
 
-	wl->scan_wlvif = wlvif;
-	wl->scan.req = req;
-	memset(wl->scan.scanned_ch, 0, sizeof(wl->scan.scanned_ch));
+	cc->scan_wlvif = wlvif;
+	cc->scan.req = req;
+	memset(cc->scan.scanned_ch, 0, sizeof(cc->scan.scanned_ch));
 
 	/* we assume failure so that timeout scenarios are handled correctly */
-	wl->scan.failed = true;
-	ieee80211_queue_delayed_work(wl->hw, &wl->scan_complete_work,
+	cc->scan.failed = true;
+	ieee80211_queue_delayed_work(cc->hw, &cc->scan_complete_work,
 				     msecs_to_jiffies(CC33XX_SCAN_TIMEOUT));
 
-	cc33xx_scan_start(wl, wlvif, req);
+	cc33xx_scan_start(cc, wlvif, req);
 
 	return 0;
 }
 
-inline void wlcore_scan_sched_scan_results(struct cc33xx *wl)
+inline void cc33xx_scan_sched_scan_results(struct cc33xx *cc)
 {
 	cc33xx_debug(DEBUG_SCAN, "got periodic scan results");
 
-	ieee80211_sched_scan_results(wl->hw);
+	ieee80211_sched_scan_results(cc->hw);
 }
 
-void cc33xx_scan_completed(struct cc33xx *wl, struct cc33xx_vif *wlvif)
+void cc33xx_scan_completed(struct cc33xx *cc, struct cc33xx_vif *wlvif)
 {
-	wl->scan.failed = false;
-	cancel_delayed_work(&wl->scan_complete_work);
-	ieee80211_queue_delayed_work(wl->hw, &wl->scan_complete_work,
+	cc->scan.failed = false;
+	cancel_delayed_work(&cc->scan_complete_work);
+	ieee80211_queue_delayed_work(cc->hw, &cc->scan_complete_work,
 				     msecs_to_jiffies(0));
 }

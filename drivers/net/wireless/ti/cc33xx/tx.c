@@ -12,23 +12,23 @@
 #include "io.h"
 #include "ps.h"
 #include "tx.h"
-#include "wlcore.h"
+#include "cc33xx.h"
 
 #define NAB_SEND_CMD			0x940d
 #define NAB_SEND_FLAGS			0x08
 #define CC33xx_INTERNAL_DESC_SIZE	200
 
-static int cc33xx_set_default_wep_key(struct cc33xx *wl,
+static int cc33xx_set_default_wep_key(struct cc33xx *cc,
 				      struct cc33xx_vif *wlvif, u8 id)
 {
 	int ret;
 	bool is_ap = (wlvif->bss_type == BSS_TYPE_AP_BSS);
 
 	if (is_ap)
-		ret = cc33xx_cmd_set_default_wep_key(wl, id,
+		ret = cc33xx_cmd_set_default_wep_key(cc, id,
 						     wlvif->ap.bcast_hlid);
 	else
-		ret = cc33xx_cmd_set_default_wep_key(wl, id, wlvif->sta.hlid);
+		ret = cc33xx_cmd_set_default_wep_key(cc, id, wlvif->sta.hlid);
 
 	if (ret < 0)
 		return ret;
@@ -37,38 +37,38 @@ static int cc33xx_set_default_wep_key(struct cc33xx *wl,
 	return 0;
 }
 
-static int cc33xx_alloc_tx_id(struct cc33xx *wl, struct sk_buff *skb)
+static int cc33xx_alloc_tx_id(struct cc33xx *cc, struct sk_buff *skb)
 {
 	int id;
 
-	id = find_first_zero_bit(wl->tx_frames_map, CC33XX_NUM_TX_DESCRIPTORS);
+	id = find_first_zero_bit(cc->tx_frames_map, CC33XX_NUM_TX_DESCRIPTORS);
 	if (id >= CC33XX_NUM_TX_DESCRIPTORS)
 		return -EBUSY;
 
-	__set_bit(id, wl->tx_frames_map);
-	wl->tx_frames[id] = skb;
-	wl->tx_frames_cnt++;
+	__set_bit(id, cc->tx_frames_map);
+	cc->tx_frames[id] = skb;
+	cc->tx_frames_cnt++;
 	cc33xx_debug(DEBUG_TX, "alloc desc ID. id - %d, frames count %d",
-		     id, wl->tx_frames_cnt);
+		     id, cc->tx_frames_cnt);
 	return id;
 }
 
-void cc33xx_free_tx_id(struct cc33xx *wl, int id)
+void cc33xx_free_tx_id(struct cc33xx *cc, int id)
 {
-	if (__test_and_clear_bit(id, wl->tx_frames_map)) {
-		if (unlikely(wl->tx_frames_cnt == CC33XX_NUM_TX_DESCRIPTORS))
-			clear_bit(CC33XX_FLAG_FW_TX_BUSY, &wl->flags);
+	if (__test_and_clear_bit(id, cc->tx_frames_map)) {
+		if (unlikely(cc->tx_frames_cnt == CC33XX_NUM_TX_DESCRIPTORS))
+			clear_bit(CC33XX_FLAG_FW_TX_BUSY, &cc->flags);
 
-		wl->tx_frames[id] = NULL;
-		wl->tx_frames_cnt--;
+		cc->tx_frames[id] = NULL;
+		cc->tx_frames_cnt--;
 	}
 	cc33xx_debug(DEBUG_TX, "free desc ID. id - %d, frames count %d",
-		     id, wl->tx_frames_cnt);
+		     id, cc->tx_frames_cnt);
 
 }
 EXPORT_SYMBOL(cc33xx_free_tx_id);
 
-static void cc33xx_tx_ap_update_inconnection_sta(struct cc33xx *wl,
+static void cc33xx_tx_ap_update_inconnection_sta(struct cc33xx *cc,
 						 struct cc33xx_vif *wlvif,
 						 struct sk_buff *skb)
 {
@@ -84,15 +84,15 @@ static void cc33xx_tx_ap_update_inconnection_sta(struct cc33xx *wl,
 	 * Note the ROC will be continued by the update_sta_state callbacks
 	 * once the station reaches the associated state.
 	 */
-	wlcore_update_inconn_sta(wl, wlvif, NULL, true);
+	cc33xx_update_inconn_sta(cc, wlvif, NULL, true);
 	wlvif->pending_auth_reply_time = jiffies;
 	cancel_delayed_work(&wlvif->pending_auth_complete_work);
-	ieee80211_queue_delayed_work(wl->hw,
+	ieee80211_queue_delayed_work(cc->hw,
 				     &wlvif->pending_auth_complete_work,
-				msecs_to_jiffies(WLCORE_PEND_AUTH_ROC_TIMEOUT));
+				msecs_to_jiffies(CC33XX_PEND_AUTH_ROC_TIMEOUT));
 }
 
-static void cc33xx_tx_regulate_link(struct cc33xx *wl,
+static void cc33xx_tx_regulate_link(struct cc33xx *cc,
 				    struct cc33xx_vif *wlvif,
 				    u8 hlid)
 {
@@ -102,8 +102,8 @@ static void cc33xx_tx_regulate_link(struct cc33xx *wl,
 	if (WARN_ON(!test_bit(hlid, wlvif->links_map)))
 		return;
 
-	fw_ps = test_bit(hlid, &wl->ap_fw_ps_map);
-	tx_pkts = wl->links[hlid].allocated_pkts;
+	fw_ps = test_bit(hlid, &cc->ap_fw_ps_map);
+	tx_pkts = cc->links[hlid].allocated_pkts;
 
 	/*
 	 * if in FW PS and there is enough data in FW we can put the link
@@ -115,18 +115,18 @@ static void cc33xx_tx_regulate_link(struct cc33xx *wl,
 	 * for each AP. The "fw_ps" check assures us the other link is a STA
 	 * connected to the AP. Otherwise the FW would not set the PSM bit.
 	 */
-	if (wl->active_link_count > (wl->ap_count*2 + 1) && fw_ps &&
+	if (cc->active_link_count > (cc->ap_count*2 + 1) && fw_ps &&
 	    tx_pkts >= CC33XX_PS_STA_MAX_PACKETS)
-		cc33xx_ps_link_start(wl, wlvif, hlid, true);
+		cc33xx_ps_link_start(cc, wlvif, hlid, true);
 }
 
-inline bool cc33xx_is_dummy_packet(struct cc33xx *wl, struct sk_buff *skb)
+inline bool cc33xx_is_dummy_packet(struct cc33xx *cc, struct sk_buff *skb)
 {
-	return wl->dummy_packet == skb;
+	return cc->dummy_packet == skb;
 }
 EXPORT_SYMBOL(cc33xx_is_dummy_packet);
 
-static u8 cc33xx_tx_get_hlid_ap(struct cc33xx *wl, struct cc33xx_vif *wlvif,
+static u8 cc33xx_tx_get_hlid_ap(struct cc33xx *cc, struct cc33xx_vif *wlvif,
 				struct sk_buff *skb, struct ieee80211_sta *sta)
 {
 	if (sta) {
@@ -148,13 +148,13 @@ static u8 cc33xx_tx_get_hlid_ap(struct cc33xx *wl, struct cc33xx_vif *wlvif,
 	}
 }
 
-u8 cc33xx_tx_get_hlid(struct cc33xx *wl, struct cc33xx_vif *wlvif,
+u8 cc33xx_tx_get_hlid(struct cc33xx *cc, struct cc33xx_vif *wlvif,
 		      struct sk_buff *skb, struct ieee80211_sta *sta)
 {
 	struct ieee80211_tx_info *control;
 
 	if (wlvif->bss_type == BSS_TYPE_AP_BSS)
-		return cc33xx_tx_get_hlid_ap(wl, wlvif, skb, sta);
+		return cc33xx_tx_get_hlid_ap(cc, wlvif, skb, sta);
 
 	control = IEEE80211_SKB_CB(skb);
 	if (control->flags & IEEE80211_TX_CTL_TX_OFFCHAN) {
@@ -165,18 +165,18 @@ u8 cc33xx_tx_get_hlid(struct cc33xx *wl, struct cc33xx_vif *wlvif,
 	return wlvif->sta.hlid;
 }
 
-static unsigned int wlcore_calc_packet_alignment(struct cc33xx *wl,
+static unsigned int cc33xx_calc_packet_alignment(struct cc33xx *cc,
 					  unsigned int packet_length)
 {
-	if ((wl->quirks & WLCORE_QUIRK_TX_PAD_LAST_FRAME) ||
-	    !(wl->quirks & WLCORE_QUIRK_TX_BLOCKSIZE_ALIGN))
+	if ((cc->quirks & CC33XX_QUIRK_TX_PAD_LAST_FRAME) ||
+	    !(cc->quirks & CC33XX_QUIRK_TX_BLOCKSIZE_ALIGN))
 		return ALIGN(packet_length, CC33XX_TX_ALIGN_TO);
 	else
 		return ALIGN(packet_length, CC33XX_BUS_BLOCK_SIZE);
 }
-//EXPORT_SYMBOL(wlcore_calc_packet_alignment);
+//EXPORT_SYMBOL(cc33xx_calc_packet_alignment);
 
-static u32 cc33xx_calc_tx_blocks(struct cc33xx *wl, u32 len, u32 spare_blks)
+static u32 cc33xx_calc_tx_blocks(struct cc33xx *cc, u32 len, u32 spare_blks)
 {
 	u32 blk_size = CC33XX_TX_HW_BLOCK_SIZE;
 	/* In CC33xx the packet will be stored along with its internal descriptor.
@@ -187,21 +187,21 @@ static u32 cc33xx_calc_tx_blocks(struct cc33xx *wl, u32 len, u32 spare_blks)
 	return (len + blk_size - 1) / blk_size + spare_blks;
 }
 
-static inline void cc33xx_set_tx_desc_blocks(struct cc33xx *wl,
+static inline void cc33xx_set_tx_desc_blocks(struct cc33xx *cc,
 					     struct cc33xx_tx_hw_descr *desc,
 					     u32 blks, u32 spare_blks)
 {
 	desc->cc33xx_mem.total_mem_blocks = blks;
 }
 
-static void cc33xx_set_tx_desc_data_len(struct cc33xx *wl,
+static void cc33xx_set_tx_desc_data_len(struct cc33xx *cc,
 					struct cc33xx_tx_hw_descr *desc,
 					struct sk_buff *skb)
 {
 	desc->length = cpu_to_le16(skb->len);
 
 	/* if only the last frame is to be padded, we unset this bit on Tx */
-	if (wl->quirks & WLCORE_QUIRK_TX_PAD_LAST_FRAME)
+	if (cc->quirks & CC33XX_QUIRK_TX_PAD_LAST_FRAME)
 		desc->cc33xx_mem.ctrl = CC33XX_TX_CTRL_NOT_PADDED;
 	else
 		desc->cc33xx_mem.ctrl = 0;
@@ -212,10 +212,10 @@ static void cc33xx_set_tx_desc_data_len(struct cc33xx *wl,
 		     desc->cc33xx_mem.total_mem_blocks);
 }
 
-static int cc33xx_get_spare_blocks(struct cc33xx *wl, bool is_gem)
+static int cc33xx_get_spare_blocks(struct cc33xx *cc, bool is_gem)
 {
 	/* If we have keys requiring extra spare, indulge them */
-	if (wl->extra_spare_key_count)
+	if (cc->extra_spare_key_count)
 		return CC33XX_TX_HW_EXTRA_BLOCK_SPARE;
 
 	return CC33XX_TX_HW_BLOCK_SPARE;
@@ -246,7 +246,7 @@ int cc33xx_tx_get_queue(int queue)
 	}
 }
 
-static int cc33xx_tx_allocate(struct cc33xx *wl, struct cc33xx_vif *wlvif,
+static int cc33xx_tx_allocate(struct cc33xx *cc, struct cc33xx_vif *wlvif,
 			      struct sk_buff *skb, u32 extra, u32 buf_offset,
 			      u8 hlid, bool is_gem,
 			      struct NAB_tx_header *nab_cmd)
@@ -262,18 +262,18 @@ static int cc33xx_tx_allocate(struct cc33xx *wl, struct cc33xx_vif *wlvif,
 	total_skb_len += sizeof(struct cc33xx_tx_hw_descr);
 	total_len += total_skb_len;
 
-	cc33xx_debug(DEBUG_TX, "michal1 wl->tx_blocks_available %d",
-    		     wl->tx_blocks_available);
+	cc33xx_debug(DEBUG_TX, "michal1 cc->tx_blocks_available %d",
+    		     cc->tx_blocks_available);
 
-	if (buf_offset + total_len > wl->aggr_buf_size) {
+	if (buf_offset + total_len > cc->aggr_buf_size) {
 		cc33xx_debug(DEBUG_TX,"michal2");
 		return -EAGAIN;
 	}
 
-	spare_blocks = cc33xx_get_spare_blocks(wl, is_gem);
+	spare_blocks = cc33xx_get_spare_blocks(cc, is_gem);
 
 	/* allocate free identifier for the packet */
-	id = cc33xx_alloc_tx_id(wl, skb);
+	id = cc33xx_alloc_tx_id(cc, skb);
 	if (id < 0)
 	{
 	    	cc33xx_debug(DEBUG_TX,"michal3");
@@ -281,10 +281,10 @@ static int cc33xx_tx_allocate(struct cc33xx *wl, struct cc33xx_vif *wlvif,
 	}
 
 	/* memblocks should not include nab descriptor */
-	total_blocks = cc33xx_calc_tx_blocks(wl, total_skb_len, spare_blocks);
+	total_blocks = cc33xx_calc_tx_blocks(cc, total_skb_len, spare_blocks);
 	cc33xx_debug(DEBUG_TX,"michal1 total blocks %d", total_blocks);
 
-	if (total_blocks <= wl->tx_blocks_available) {
+	if (total_blocks <= cc->tx_blocks_available) {
 		/**
 		 * In CC33XX the packet starts with NAB command,
 		 * only then the descriptor.
@@ -305,7 +305,7 @@ static int cc33xx_tx_allocate(struct cc33xx *wl, struct cc33xx_vif *wlvif,
 
 		desc = skb_push(skb, total_skb_len - skb->len);
 
-		cc33xx_set_tx_desc_blocks(wl, desc, total_blocks, spare_blocks);
+		cc33xx_set_tx_desc_blocks(cc, desc, total_blocks, spare_blocks);
 
 		desc->id = id;
 
@@ -313,24 +313,24 @@ static int cc33xx_tx_allocate(struct cc33xx *wl, struct cc33xx_vif *wlvif,
 			     "tx alocate id %u skb 0x%p tx_memblocks %d",
 			     id, skb, desc->cc33xx_mem.total_mem_blocks);
 
-		wl->tx_blocks_available -= total_blocks;
-		wl->tx_allocated_blocks += total_blocks;
+		cc->tx_blocks_available -= total_blocks;
+		cc->tx_allocated_blocks += total_blocks;
 
 		/*
 		* If the FW was empty before, arm the Tx watchdog. Also do
 		* this on the first Tx after resume, as we always cancel the
 		* watchdog on suspend.
 		*/
-		if (wl->tx_allocated_blocks == total_blocks ||
-		    test_and_clear_bit(CC33XX_FLAG_REINIT_TX_WDOG, &wl->flags))
-			cc33xx_rearm_tx_watchdog_locked(wl);
+		if (cc->tx_allocated_blocks == total_blocks ||
+		    test_and_clear_bit(CC33XX_FLAG_REINIT_TX_WDOG, &cc->flags))
+			cc33xx_rearm_tx_watchdog_locked(cc);
 
 		ac = cc33xx_tx_get_queue(skb_get_queue_mapping(skb));
 		desc->ac = ac;
-		wl->tx_allocated_pkts[ac]++;
+		cc->tx_allocated_pkts[ac]++;
 
-		if (test_bit(hlid, wl->links_map))
-			wl->links[hlid].allocated_pkts++;
+		if (test_bit(hlid, cc->links_map))
+			cc->links[hlid].allocated_pkts++;
 
 		ret = 0;
 
@@ -339,13 +339,13 @@ static int cc33xx_tx_allocate(struct cc33xx *wl, struct cc33xx_vif *wlvif,
 			     total_len, total_blocks, id);
 	} else {
 	    cc33xx_debug(DEBUG_TX,"michal4");
-		cc33xx_free_tx_id(wl, id);
+		cc33xx_free_tx_id(cc, id);
 	}
 
 	return ret;
 }
 
-static void cc33xx_tx_fill_hdr(struct cc33xx *wl, struct cc33xx_vif *wlvif,
+static void cc33xx_tx_fill_hdr(struct cc33xx *cc, struct cc33xx_vif *wlvif,
 			       struct sk_buff *skb, u32 extra,
 			       struct ieee80211_tx_info *control, u8 hlid)
 {
@@ -374,9 +374,9 @@ static void cc33xx_tx_fill_hdr(struct cc33xx *wl, struct cc33xx_vif *wlvif,
 	/* configure packet life time */
 	hosttime = (ktime_get_boottime_ns() >> 10);
 	// michal temp removal
-	//desc->start_time = cpu_to_le32(hosttime - wl->time_offset);
+	//desc->start_time = cpu_to_le32(hosttime - cc->time_offset);
 
-	is_dummy = cc33xx_is_dummy_packet(wl, skb);
+	is_dummy = cc33xx_is_dummy_packet(cc, skb);
 	if (is_dummy || !wlvif || wlvif->bss_type != BSS_TYPE_AP_BSS)
 		desc->life_time = cpu_to_le16(TX_HW_MGMT_PKT_LIFETIME_TU);
 	else
@@ -397,9 +397,9 @@ static void cc33xx_tx_fill_hdr(struct cc33xx *wl, struct cc33xx_vif *wlvif,
 
 		tx_attr |= TX_HW_ATTR_TX_DUMMY_REQ;
 	} else if (wlvif) {
-		u8 session_id = wl->session_ids[hlid];
+		u8 session_id = cc->session_ids[hlid];
 
-		if ((wl->quirks & WLCORE_QUIRK_AP_ZERO_SESSION_ID) &&
+		if ((cc->quirks & CC33XX_QUIRK_AP_ZERO_SESSION_ID) &&
 		    (wlvif->bss_type == BSS_TYPE_AP_BSS))
 			session_id = 0;
 
@@ -452,11 +452,11 @@ static void cc33xx_tx_fill_hdr(struct cc33xx *wl, struct cc33xx_vif *wlvif,
 
 	desc->tx_attr = cpu_to_le16(tx_attr);
 
-	cc33xx_set_tx_desc_data_len(wl, desc, skb);
+	cc33xx_set_tx_desc_data_len(cc, desc, skb);
 }
 
-/* caller must hold wl->mutex */
-static int cc33xx_prepare_tx_frame(struct cc33xx *wl, struct cc33xx_vif *wlvif,
+/* caller must hold cc->mutex */
+static int cc33xx_prepare_tx_frame(struct cc33xx *cc, struct cc33xx_vif *wlvif,
 				   struct sk_buff *skb, u32 buf_offset, u8 hlid)
 {
 	struct ieee80211_tx_info *info;
@@ -479,9 +479,9 @@ static int cc33xx_prepare_tx_frame(struct cc33xx *wl, struct cc33xx_vif *wlvif,
 
 	info = IEEE80211_SKB_CB(skb);
 
-	is_dummy = cc33xx_is_dummy_packet(wl, skb);
+	is_dummy = cc33xx_is_dummy_packet(cc, skb);
 
-	if ((wl->quirks & WLCORE_QUIRK_TKIP_HEADER_SPACE) &&
+	if ((cc->quirks & CC33XX_QUIRK_TKIP_HEADER_SPACE) &&
 	    info->control.hw_key &&
 	    info->control.hw_key->cipher == WLAN_CIPHER_SUITE_TKIP)
 		extra = CC33XX_EXTRA_SPACE_TKIP;
@@ -495,7 +495,7 @@ static int cc33xx_prepare_tx_frame(struct cc33xx *wl, struct cc33xx_vif *wlvif,
 			 (cipher == WLAN_CIPHER_SUITE_WEP104);
 
 		if (WARN_ON(is_wep && wlvif && wlvif->default_key != idx)) {
-			ret = cc33xx_set_default_wep_key(wl, wlvif, idx);
+			ret = cc33xx_set_default_wep_key(cc, wlvif, idx);
 			if (ret < 0)
 				return ret;
 			wlvif->default_key = idx;
@@ -506,20 +506,20 @@ static int cc33xx_prepare_tx_frame(struct cc33xx *wl, struct cc33xx_vif *wlvif,
 
 	/* Add 4 bytes gap, may be filled later on by the PMAC. */
 	extra += IEEE80211_HT_CTL_LEN;
-	ret = cc33xx_tx_allocate(wl, wlvif, skb, extra, buf_offset, hlid,
+	ret = cc33xx_tx_allocate(cc, wlvif, skb, extra, buf_offset, hlid,
 				 is_gem, &nab_cmd);
 	cc33xx_debug(DEBUG_TX, "cc33xx_tx_allocate %d", ret);
 
 	if (ret < 0)
 		return ret;
 
-	cc33xx_tx_fill_hdr(wl, wlvif, skb, extra, info, hlid);
+	cc33xx_tx_fill_hdr(cc, wlvif, skb, extra, info, hlid);
 
 	cc33xx_debug(DEBUG_TX, "cc33xx_tx_fill_hdr ");
 
 	if (!is_dummy && wlvif && wlvif->bss_type == BSS_TYPE_AP_BSS) {
-		cc33xx_tx_ap_update_inconnection_sta(wl, wlvif, skb);
-		cc33xx_tx_regulate_link(wl, wlvif, hlid);
+		cc33xx_tx_ap_update_inconnection_sta(cc, wlvif, skb);
+		cc33xx_tx_regulate_link(cc, wlvif, hlid);
 	}
 
 	/*
@@ -530,14 +530,14 @@ static int cc33xx_prepare_tx_frame(struct cc33xx *wl, struct cc33xx_vif *wlvif,
 	 * In special cases, we want to align to a specific block size
 	 * (eg. for wl128x with SDIO we align to 256).
 	 */
-	total_len = wlcore_calc_packet_alignment(wl, skb->len);
-	cc33xx_debug(DEBUG_TX, "wlcore_calc_packet_alignment ");
+	total_len = cc33xx_calc_packet_alignment(cc, skb->len);
+	cc33xx_debug(DEBUG_TX, "cc33xx_calc_packet_alignment ");
 
-	memcpy(wl->aggr_buf + buf_offset,
+	memcpy(cc->aggr_buf + buf_offset,
 	       &nab_cmd, sizeof(struct NAB_tx_header));
-	memcpy(wl->aggr_buf + buf_offset + sizeof(struct NAB_tx_header),
+	memcpy(cc->aggr_buf + buf_offset + sizeof(struct NAB_tx_header),
 	       skb->data, skb->len);
-	memset(wl->aggr_buf + buf_offset + sizeof(struct NAB_tx_header) 
+	memset(cc->aggr_buf + buf_offset + sizeof(struct NAB_tx_header) 
 		+ skb->len, 0, total_len - skb->len);
 
 	/* Revert side effects in the dummy packet skb, so it can be reused */
@@ -547,14 +547,14 @@ static int cc33xx_prepare_tx_frame(struct cc33xx *wl, struct cc33xx_vif *wlvif,
 	return (total_len + sizeof(struct NAB_tx_header));
 }
 
-u32 cc33xx_tx_enabled_rates_get(struct cc33xx *wl, u32 rate_set,
+u32 cc33xx_tx_enabled_rates_get(struct cc33xx *cc, u32 rate_set,
 				enum nl80211_band rate_band)
 {
 	struct ieee80211_supported_band *band;
 	u32 enabled_rates = 0;
 	int bit;
 
-	band = wl->hw->wiphy->bands[rate_band];
+	band = cc->hw->wiphy->bands[rate_band];
 	for (bit = 0; bit < band->n_bitrates; bit++) {
 		if (rate_set & 0x1)
 			enabled_rates |= band->bitrates[bit].hw_value;
@@ -573,7 +573,7 @@ u32 cc33xx_tx_enabled_rates_get(struct cc33xx *wl, u32 rate_set,
 	return enabled_rates;
 }
 
-static inline int wlcore_tx_get_mac80211_queue(struct cc33xx_vif *wlvif,
+static inline int cc33xx_tx_get_mac80211_queue(struct cc33xx_vif *wlvif,
 					       int queue)
 {
 	int mac_queue = wlvif->hw_queue_base;
@@ -592,45 +592,45 @@ static inline int wlcore_tx_get_mac80211_queue(struct cc33xx_vif *wlvif,
 	}
 }
 
-static void wlcore_wake_queue(struct cc33xx *wl, struct cc33xx_vif *wlvif,
-			      u8 queue, enum wlcore_queue_stop_reason reason)
+static void cc33xx_wake_queue(struct cc33xx *cc, struct cc33xx_vif *wlvif,
+			      u8 queue, enum cc33xx_queue_stop_reason reason)
 {
 	unsigned long flags;
-	int hwq = wlcore_tx_get_mac80211_queue(wlvif, queue);
+	int hwq = cc33xx_tx_get_mac80211_queue(wlvif, queue);
 
-	spin_lock_irqsave(&wl->wl_lock, flags);
+	spin_lock_irqsave(&cc->wl_lock, flags);
 
 	/* queue should not be clear for this reason */
-	WARN_ON_ONCE(!test_and_clear_bit(reason, &wl->queue_stop_reasons[hwq]));
+	WARN_ON_ONCE(!test_and_clear_bit(reason, &cc->queue_stop_reasons[hwq]));
 
-	if (wl->queue_stop_reasons[hwq])
+	if (cc->queue_stop_reasons[hwq])
 		goto out;
 
-	ieee80211_wake_queue(wl->hw, hwq);
+	ieee80211_wake_queue(cc->hw, hwq);
 
 out:
-	spin_unlock_irqrestore(&wl->wl_lock, flags);
+	spin_unlock_irqrestore(&cc->wl_lock, flags);
 }
 
-void cc33xx_handle_tx_low_watermark(struct cc33xx *wl)
+void cc33xx_handle_tx_low_watermark(struct cc33xx *cc)
 {
 	int i;
 	struct cc33xx_vif *wlvif;
 
-	cc33xx_for_each_wlvif(wl, wlvif) {
+	cc33xx_for_each_wlvif(cc, wlvif) {
 		for (i = 0; i < NUM_TX_QUEUES; i++) {
-			if (wlcore_is_queue_stopped_by_reason(wl, wlvif, i,
-					WLCORE_QUEUE_STOP_REASON_WATERMARK) &&
+			if (cc33xx_is_queue_stopped_by_reason(cc, wlvif, i,
+					CC33XX_QUEUE_STOP_REASON_WATERMARK) &&
 			    wlvif->tx_queue_count[i] <=
 					CC33XX_TX_QUEUE_LOW_WATERMARK)
 				/* firmware buffer has space, restart queues */
-				wlcore_wake_queue(wl, wlvif, i,
-					WLCORE_QUEUE_STOP_REASON_WATERMARK);
+				cc33xx_wake_queue(cc, wlvif, i,
+					CC33XX_QUEUE_STOP_REASON_WATERMARK);
 		}
 	}
 }
 
-static int wlcore_select_ac(struct cc33xx *wl)
+static int cc33xx_select_ac(struct cc33xx *cc)
 {
 	int i, q = -1, ac;
 	u32 min_pkts = 0xffffffff;
@@ -644,17 +644,17 @@ static int wlcore_select_ac(struct cc33xx *wl)
 	 */
 	for (i = 0; i < NUM_TX_QUEUES; i++) {
 		ac = cc33xx_tx_get_queue(i);
-		if (wl->tx_queue_count[ac] &&
-		    wl->tx_allocated_pkts[ac] < min_pkts) {
+		if (cc->tx_queue_count[ac] &&
+		    cc->tx_allocated_pkts[ac] < min_pkts) {
 			q = ac;
-			min_pkts = wl->tx_allocated_pkts[q];
+			min_pkts = cc->tx_allocated_pkts[q];
 		}
 	}
 
 	return q;
 }
 
-static struct sk_buff *wlcore_lnk_dequeue(struct cc33xx *wl,
+static struct sk_buff *cc33xx_lnk_dequeue(struct cc33xx *cc,
 					  struct cc33xx_link *lnk, u8 q)
 {
 	struct sk_buff *skb;
@@ -662,24 +662,24 @@ static struct sk_buff *wlcore_lnk_dequeue(struct cc33xx *wl,
 
 	skb = skb_dequeue(&lnk->tx_queue[q]);
 	if (skb) {
-		spin_lock_irqsave(&wl->wl_lock, flags);
-		WARN_ON_ONCE(wl->tx_queue_count[q] <= 0);
-		wl->tx_queue_count[q]--;
+		spin_lock_irqsave(&cc->wl_lock, flags);
+		WARN_ON_ONCE(cc->tx_queue_count[q] <= 0);
+		cc->tx_queue_count[q]--;
 		if (lnk->wlvif) {
 			WARN_ON_ONCE(lnk->wlvif->tx_queue_count[q] <= 0);
 			lnk->wlvif->tx_queue_count[q]--;
 		}
-		spin_unlock_irqrestore(&wl->wl_lock, flags);
+		spin_unlock_irqrestore(&cc->wl_lock, flags);
 	}
 
 	return skb;
 }
 
-static bool cc33xx_lnk_high_prio(struct cc33xx *wl, u8 hlid,
+static bool cc33xx_lnk_high_prio(struct cc33xx *cc, u8 hlid,
 				 struct cc33xx_link *lnk)
 {
 	u8 thold;
-	struct core_fw_status * core_fw_status = &wl->core_status->fwInfo;
+	struct core_fw_status * core_fw_status = &cc->core_status->fwInfo;
 	unsigned long suspend_bitmap, fast_bitmap, ps_bitmap;
 
 	suspend_bitmap = le32_to_cpu(core_fw_status->link_suspend_bitmap);
@@ -699,11 +699,11 @@ static bool cc33xx_lnk_high_prio(struct cc33xx *wl, u8 hlid,
 	return lnk->allocated_pkts < thold;
 }
 
-static bool cc33xx_lnk_low_prio(struct cc33xx *wl, u8 hlid,
+static bool cc33xx_lnk_low_prio(struct cc33xx *cc, u8 hlid,
 				struct cc33xx_link *lnk)
 {
 	u8 thold;
-	struct core_fw_status *core_fw_status = &wl->core_status->fwInfo;
+	struct core_fw_status *core_fw_status = &cc->core_status->fwInfo;
 	unsigned long suspend_bitmap, fast_bitmap, ps_bitmap;
 
 	suspend_bitmap = le32_to_cpu(core_fw_status->link_suspend_bitmap);
@@ -720,26 +720,26 @@ static bool cc33xx_lnk_low_prio(struct cc33xx *wl, u8 hlid,
 	return lnk->allocated_pkts < thold;
 }
 
-static struct sk_buff *wlcore_lnk_dequeue_high_prio(struct cc33xx *wl,
+static struct sk_buff *cc33xx_lnk_dequeue_high_prio(struct cc33xx *cc,
 						    u8 hlid, u8 ac,
 						    u8 *low_prio_hlid)
 {
-	struct cc33xx_link *lnk = &wl->links[hlid];
+	struct cc33xx_link *lnk = &cc->links[hlid];
 
-	if (!cc33xx_lnk_high_prio(wl, hlid, lnk)) {
+	if (!cc33xx_lnk_high_prio(cc, hlid, lnk)) {
 		if (*low_prio_hlid == CC33XX_INVALID_LINK_ID &&
 		    !skb_queue_empty(&lnk->tx_queue[ac]) &&
-		    cc33xx_lnk_low_prio(wl, hlid, lnk))
+		    cc33xx_lnk_low_prio(cc, hlid, lnk))
 			/* we found the first non-empty low priority queue */
 			*low_prio_hlid = hlid;
 
 		return NULL;
 	}
 
-	return wlcore_lnk_dequeue(wl, lnk, ac);
+	return cc33xx_lnk_dequeue(cc, lnk, ac);
 }
 
-static struct sk_buff *wlcore_vif_dequeue_high_prio(struct cc33xx *wl,
+static struct sk_buff *cc33xx_vif_dequeue_high_prio(struct cc33xx *cc,
 						    struct cc33xx_vif *wlvif,
 						    u8 ac, u8 *hlid,
 						    u8 *low_prio_hlid)
@@ -758,7 +758,7 @@ static struct sk_buff *wlcore_vif_dequeue_high_prio(struct cc33xx *wl,
 		if (!test_bit(h, wlvif->links_map))
 			continue;
 
-		skb = wlcore_lnk_dequeue_high_prio(wl, h, ac, low_prio_hlid);
+		skb = cc33xx_lnk_dequeue_high_prio(cc, h, ac, low_prio_hlid);
 		if (!skb)
 			continue;
 
@@ -773,74 +773,74 @@ static struct sk_buff *wlcore_vif_dequeue_high_prio(struct cc33xx *wl,
 	return skb;
 }
 
-static struct sk_buff *cc33xx_skb_dequeue(struct cc33xx *wl, u8 *hlid)
+static struct sk_buff *cc33xx_skb_dequeue(struct cc33xx *cc, u8 *hlid)
 {
 	unsigned long flags;
-	struct cc33xx_vif *wlvif = wl->last_wlvif;
+	struct cc33xx_vif *wlvif = cc->last_wlvif;
 	struct sk_buff *skb = NULL;
 	int ac;
 	u8 low_prio_hlid = CC33XX_INVALID_LINK_ID;
 
-	ac = wlcore_select_ac(wl);
+	ac = cc33xx_select_ac(cc);
 	if (ac < 0)
 		goto out;
 
 	/* continue from last wlvif (round robin) */
 	if (wlvif) {
-		cc33xx_for_each_wlvif_continue(wl, wlvif) {
+		cc33xx_for_each_wlvif_continue(cc, wlvif) {
 			if (!wlvif->tx_queue_count[ac])
 				continue;
 
-			skb = wlcore_vif_dequeue_high_prio(wl, wlvif, ac, hlid,
+			skb = cc33xx_vif_dequeue_high_prio(cc, wlvif, ac, hlid,
 							   &low_prio_hlid);
 			if (!skb)
 				continue;
 
-			wl->last_wlvif = wlvif;
+			cc->last_wlvif = wlvif;
 			break;
 		}
 	}
 
 	/* dequeue from the system HLID before the restarting wlvif list */
 	if (!skb) {
-		skb = wlcore_lnk_dequeue_high_prio(wl, CC33XX_SYSTEM_HLID,
+		skb = cc33xx_lnk_dequeue_high_prio(cc, CC33XX_SYSTEM_HLID,
 						   ac, &low_prio_hlid);
 		if (skb) {
 			*hlid = CC33XX_SYSTEM_HLID;
-			wl->last_wlvif = NULL;
+			cc->last_wlvif = NULL;
 		}
 	}
 
 	/* Do a new pass over the wlvif list. But no need to continue
 	 * after last_wlvif. The previous pass should have found it. */
 	if (!skb) {
-		cc33xx_for_each_wlvif(wl, wlvif) {
+		cc33xx_for_each_wlvif(cc, wlvif) {
 			if (!wlvif->tx_queue_count[ac])
 				goto next;
 
-			skb = wlcore_vif_dequeue_high_prio(wl, wlvif, ac, hlid,
+			skb = cc33xx_vif_dequeue_high_prio(cc, wlvif, ac, hlid,
 							   &low_prio_hlid);
 			if (skb) {
-				wl->last_wlvif = wlvif;
+				cc->last_wlvif = wlvif;
 				break;
 			}
 
 next:
-			if (wlvif == wl->last_wlvif)
+			if (wlvif == cc->last_wlvif)
 				break;
 		}
 	}
 
 	/* no high priority skbs found - but maybe a low priority one? */
 	if (!skb && low_prio_hlid != CC33XX_INVALID_LINK_ID) {
-		struct cc33xx_link *lnk = &wl->links[low_prio_hlid];
-		skb = wlcore_lnk_dequeue(wl, lnk, ac);
+		struct cc33xx_link *lnk = &cc->links[low_prio_hlid];
+		skb = cc33xx_lnk_dequeue(cc, lnk, ac);
 
 		WARN_ON(!skb); /* we checked this before */
 		*hlid = low_prio_hlid;
 
 		/* ensure proper round robin in the vif/link levels */
-		wl->last_wlvif = lnk->wlvif;
+		cc->last_wlvif = lnk->wlvif;
 		if (lnk->wlvif)
 			lnk->wlvif->last_tx_hlid = low_prio_hlid;
 
@@ -848,42 +848,42 @@ next:
 
 out:
 	if (!skb &&
-	    test_and_clear_bit(CC33XX_FLAG_DUMMY_PACKET_PENDING, &wl->flags)) {
+	    test_and_clear_bit(CC33XX_FLAG_DUMMY_PACKET_PENDING, &cc->flags)) {
 		int q;
 
-		skb = wl->dummy_packet;
+		skb = cc->dummy_packet;
 		*hlid = CC33XX_SYSTEM_HLID;
 		q = cc33xx_tx_get_queue(skb_get_queue_mapping(skb));
-		spin_lock_irqsave(&wl->wl_lock, flags);
-		WARN_ON_ONCE(wl->tx_queue_count[q] <= 0);
-		wl->tx_queue_count[q]--;
-		spin_unlock_irqrestore(&wl->wl_lock, flags);
+		spin_lock_irqsave(&cc->wl_lock, flags);
+		WARN_ON_ONCE(cc->tx_queue_count[q] <= 0);
+		cc->tx_queue_count[q]--;
+		spin_unlock_irqrestore(&cc->wl_lock, flags);
 	}
 
 	return skb;
 }
 
-static void cc33xx_skb_queue_head(struct cc33xx *wl, struct cc33xx_vif *wlvif,
+static void cc33xx_skb_queue_head(struct cc33xx *cc, struct cc33xx_vif *wlvif,
 				  struct sk_buff *skb, u8 hlid)
 {
 	unsigned long flags;
 	int q = cc33xx_tx_get_queue(skb_get_queue_mapping(skb));
 
-	if (cc33xx_is_dummy_packet(wl, skb)) {
-		set_bit(CC33XX_FLAG_DUMMY_PACKET_PENDING, &wl->flags);
+	if (cc33xx_is_dummy_packet(cc, skb)) {
+		set_bit(CC33XX_FLAG_DUMMY_PACKET_PENDING, &cc->flags);
 	} else {
-		skb_queue_head(&wl->links[hlid].tx_queue[q], skb);
+		skb_queue_head(&cc->links[hlid].tx_queue[q], skb);
 
 		/* make sure we dequeue the same packet next time */
 		wlvif->last_tx_hlid = (hlid + CC33XX_MAX_LINKS - 1) %
 				      CC33XX_MAX_LINKS;
 	}
 
-	spin_lock_irqsave(&wl->wl_lock, flags);
-	wl->tx_queue_count[q]++;
+	spin_lock_irqsave(&cc->wl_lock, flags);
+	cc->tx_queue_count[q]++;
 	if (wlvif)
 		wlvif->tx_queue_count[q]++;
-	spin_unlock_irqrestore(&wl->wl_lock, flags);
+	spin_unlock_irqrestore(&cc->wl_lock, flags);
 }
 
 static inline bool cc33xx_tx_is_data_present(struct sk_buff *skb)
@@ -902,7 +902,7 @@ static inline bool cc33xx_tx_is_data_present(struct sk_buff *skb)
  * within prepare_tx_frame code but there's nothing we should do about those
  * as well.
  */
-int wlcore_tx_work_locked(struct cc33xx *wl)
+int cc33xx_tx_work_locked(struct cc33xx *cc)
 {
 	struct cc33xx_vif *wlvif;
 	struct sk_buff *skb;
@@ -918,11 +918,11 @@ int wlcore_tx_work_locked(struct cc33xx *wl)
 
 	cc33xx_debug(DEBUG_TX, " Tx work locked");
 
-	memset(wl->aggr_buf,0,0x300);
-	if (unlikely(wl->state != WLCORE_STATE_ON))
+	memset(cc->aggr_buf,0,0x300);
+	if (unlikely(cc->state != CC33XX_STATE_ON))
 		return 0;
 
-	while ((skb = cc33xx_skb_dequeue(wl, &hlid))) {
+	while ((skb = cc33xx_skb_dequeue(cc, &hlid))) {
 		struct ieee80211_tx_info *info = IEEE80211_SKB_CB(skb);
 		bool has_data = false;
 
@@ -931,13 +931,13 @@ int wlcore_tx_work_locked(struct cc33xx *wl)
 			     (unsigned long)skb->data, (unsigned long)skb->head,
 			     (unsigned long)skb->tail,(unsigned long)skb->end);
 		wlvif = NULL;
-		if (!cc33xx_is_dummy_packet(wl, skb))
+		if (!cc33xx_is_dummy_packet(cc, skb))
 			wlvif = cc33xx_vif_to_data(info->control.vif);
 		else
 			hlid = CC33XX_SYSTEM_HLID;
 
 		has_data = wlvif && cc33xx_tx_is_data_present(skb);
-		ret = cc33xx_prepare_tx_frame(wl, wlvif, skb, buf_offset,
+		ret = cc33xx_prepare_tx_frame(cc, wlvif, skb, buf_offset,
 					      hlid);
 
 		if (ret == -EAGAIN) {
@@ -945,18 +945,18 @@ int wlcore_tx_work_locked(struct cc33xx *wl)
 			 * Aggregation buffer is full.
 			 * Flush buffer and try again.
 			 */
-			cc33xx_skb_queue_head(wl, wlvif, skb, hlid);
+			cc33xx_skb_queue_head(cc, wlvif, skb, hlid);
 
 			transfer_len = __ALIGN_MASK(buf_offset, 
 						CC33XX_BUS_BLOCK_SIZE*2 - 1);
 
 			padding_size = transfer_len - buf_offset;
-			memset(wl->aggr_buf + buf_offset, 0x33, padding_size);
+			memset(cc->aggr_buf + buf_offset, 0x33, padding_size);
 
 			cc33xx_debug(DEBUG_TX, "sdio transaction length: %d ",
 					transfer_len);
 
-			bus_ret = wlcore_write(wl, NAB_DATA_ADDR, wl->aggr_buf,
+			bus_ret = cc33xx_write(cc, NAB_DATA_ADDR, cc->aggr_buf,
 					       transfer_len, true);
 			if (bus_ret < 0)
 				goto out;
@@ -969,19 +969,19 @@ int wlcore_tx_work_locked(struct cc33xx *wl)
 			 * Firmware buffer is full.
 			 * Queue back last skb, and stop aggregating.
 			 */
-			cc33xx_skb_queue_head(wl, wlvif, skb, hlid);
+			cc33xx_skb_queue_head(cc, wlvif, skb, hlid);
 			/* No work left, avoid scheduling redundant tx work */
-			set_bit(CC33XX_FLAG_FW_TX_BUSY, &wl->flags);
+			set_bit(CC33XX_FLAG_FW_TX_BUSY, &cc->flags);
 			goto out_ack;
 		} else if (ret < 0) {
-			if (cc33xx_is_dummy_packet(wl, skb))
+			if (cc33xx_is_dummy_packet(cc, skb))
 				/*
 				 * fw still expects dummy packet,
 				 * so re-enqueue it
 				 */
-				cc33xx_skb_queue_head(wl, wlvif, skb, hlid);
+				cc33xx_skb_queue_head(cc, wlvif, skb, hlid);
 			else
-				ieee80211_free_txskb(wl->hw, skb);
+				ieee80211_free_txskb(cc->hw, skb);
 			goto out_ack;
 		}
 
@@ -1000,12 +1000,12 @@ out_ack:
 						CC33XX_BUS_BLOCK_SIZE*2 - 1);
 
 		padding_size = transfer_len - buf_offset;
-		memset(wl->aggr_buf + buf_offset, 0x33, padding_size);
+		memset(cc->aggr_buf + buf_offset, 0x33, padding_size);
 
 		cc33xx_debug(DEBUG_TX, "sdio transaction (926) length: %d ",
 			     transfer_len);
 
-		bus_ret = wlcore_write(wl, NAB_DATA_ADDR, wl->aggr_buf,
+		bus_ret = cc33xx_write(cc, NAB_DATA_ADDR, cc->aggr_buf,
 		 		       transfer_len, true); 
 		if (bus_ret < 0)
 			goto out;
@@ -1014,7 +1014,7 @@ out_ack:
 	}
 	
 	if (sent_packets) 
-		cc33xx_handle_tx_low_watermark(wl);
+		cc33xx_handle_tx_low_watermark(cc);
 	
 out:  
 	return bus_ret;
@@ -1022,59 +1022,59 @@ out:
 
 void cc33xx_tx_work(struct work_struct *work)
 {
-	struct cc33xx *wl = container_of(work, struct cc33xx, tx_work);
+	struct cc33xx *cc = container_of(work, struct cc33xx, tx_work);
 	int ret;
 
-	mutex_lock(&wl->mutex);
+	mutex_lock(&cc->mutex);
 
-	ret = wlcore_tx_work_locked(wl);
+	ret = cc33xx_tx_work_locked(cc);
 	if (ret < 0) {
-		cc33xx_queue_recovery_work(wl);
+		cc33xx_queue_recovery_work(cc);
 		goto out;
 	}
 
 out:
-	mutex_unlock(&wl->mutex);
+	mutex_unlock(&cc->mutex);
 }
 
-void cc33xx_tx_reset_link_queues(struct cc33xx *wl, u8 hlid)
+void cc33xx_tx_reset_link_queues(struct cc33xx *cc, u8 hlid)
 {
 	struct sk_buff *skb;
 	int i;
 	unsigned long flags;
 	struct ieee80211_tx_info *info;
 	int total[NUM_TX_QUEUES];
-	struct cc33xx_link *lnk = &wl->links[hlid];
+	struct cc33xx_link *lnk = &cc->links[hlid];
 
 	for (i = 0; i < NUM_TX_QUEUES; i++) {
 		total[i] = 0;
 		while ((skb = skb_dequeue(&lnk->tx_queue[i]))) {
 			cc33xx_debug(DEBUG_TX, "link freeing skb 0x%p", skb);
 
-			if (!cc33xx_is_dummy_packet(wl, skb)) {
+			if (!cc33xx_is_dummy_packet(cc, skb)) {
 				info = IEEE80211_SKB_CB(skb);
 				info->status.rates[0].idx = -1;
 				info->status.rates[0].count = 0;
-				ieee80211_tx_status_ni(wl->hw, skb);
+				ieee80211_tx_status_ni(cc->hw, skb);
 			}
 
 			total[i]++;
 		}
 	}
 
-	spin_lock_irqsave(&wl->wl_lock, flags);
+	spin_lock_irqsave(&cc->wl_lock, flags);
 	for (i = 0; i < NUM_TX_QUEUES; i++) {
-		wl->tx_queue_count[i] -= total[i];
+		cc->tx_queue_count[i] -= total[i];
 		if (lnk->wlvif)
 			lnk->wlvif->tx_queue_count[i] -= total[i];
 	}
-	spin_unlock_irqrestore(&wl->wl_lock, flags);
+	spin_unlock_irqrestore(&cc->wl_lock, flags);
 
-	cc33xx_handle_tx_low_watermark(wl);
+	cc33xx_handle_tx_low_watermark(cc);
 }
 
-/* caller must hold wl->mutex and TX must be stopped */
-void cc33xx_tx_reset_wlvif(struct cc33xx *wl, struct cc33xx_vif *wlvif)
+/* caller must hold cc->mutex and TX must be stopped */
+void cc33xx_tx_reset_wlvif(struct cc33xx *cc, struct cc33xx_vif *wlvif)
 {
 	int i;
 
@@ -1084,10 +1084,10 @@ void cc33xx_tx_reset_wlvif(struct cc33xx *wl, struct cc33xx_vif *wlvif)
 		    (i != wlvif->ap.bcast_hlid) && 
 		    (i != wlvif->ap.global_hlid)) {
 			/* this calls cc33xx_clear_link */
-			cc33xx_free_sta(wl, wlvif, i);
+			cc33xx_free_sta(cc, wlvif, i);
 		} else {
 			u8 hlid = i;
-			cc33xx_clear_link(wl, wlvif, &hlid);
+			cc33xx_clear_link(cc, wlvif, &hlid);
 		}
 	}
 
@@ -1097,30 +1097,30 @@ void cc33xx_tx_reset_wlvif(struct cc33xx *wl, struct cc33xx_vif *wlvif)
 		wlvif->tx_queue_count[i] = 0;
 }
 
-int cc33xx_tx_total_queue_count(struct cc33xx *wl)
+int cc33xx_tx_total_queue_count(struct cc33xx *cc)
 {
 	int i, count = 0;
 
 	for (i = 0; i < NUM_TX_QUEUES; i++)
-		count += wl->tx_queue_count[i];
+		count += cc->tx_queue_count[i];
 
 	return count;
 }
 
-/* caller must hold wl->mutex and TX must be stopped */
-void cc33xx_tx_reset(struct cc33xx *wl)
+/* caller must hold cc->mutex and TX must be stopped */
+void cc33xx_tx_reset(struct cc33xx *cc)
 {
 	int i;
 	struct sk_buff *skb;
 	struct ieee80211_tx_info *info;
 
 	/* only reset the queues if something bad happened */
-	if (cc33xx_tx_total_queue_count(wl) != 0) {
+	if (cc33xx_tx_total_queue_count(cc) != 0) {
 		for (i = 0; i < CC33XX_MAX_LINKS; i++)
-			cc33xx_tx_reset_link_queues(wl, i);
+			cc33xx_tx_reset_link_queues(cc, i);
 
 		for (i = 0; i < NUM_TX_QUEUES; i++)
-			wl->tx_queue_count[i] = 0;
+			cc->tx_queue_count[i] = 0;
 	}
 
 	/*
@@ -1128,24 +1128,24 @@ void cc33xx_tx_reset(struct cc33xx *wl)
 	 * function is called from a context other than interface removal.
 	 * This call will always wake the TX queues.
 	 */
-	cc33xx_handle_tx_low_watermark(wl);
+	cc33xx_handle_tx_low_watermark(cc);
 
 	for (i = 0; i < CC33XX_NUM_TX_DESCRIPTORS; i++) {
-		if (wl->tx_frames[i] == NULL)
+		if (cc->tx_frames[i] == NULL)
 			continue;
 
-		skb = wl->tx_frames[i];
-		cc33xx_free_tx_id(wl, i);
+		skb = cc->tx_frames[i];
+		cc33xx_free_tx_id(cc, i);
 		cc33xx_debug(DEBUG_TX, "freeing skb 0x%p", skb);
 
-		if (!cc33xx_is_dummy_packet(wl, skb)) {
+		if (!cc33xx_is_dummy_packet(cc, skb)) {
 			/*
 			 * Remove private headers before passing the skb to
 			 * mac80211
 			 */
 			info = IEEE80211_SKB_CB(skb);
 			skb_pull(skb, sizeof(struct cc33xx_tx_hw_descr));
-			if ((wl->quirks & WLCORE_QUIRK_TKIP_HEADER_SPACE) &&
+			if ((cc->quirks & CC33XX_QUIRK_TKIP_HEADER_SPACE) &&
 			    info->control.hw_key &&
 			    info->control.hw_key->cipher ==
 			    WLAN_CIPHER_SUITE_TKIP) {
@@ -1158,15 +1158,15 @@ void cc33xx_tx_reset(struct cc33xx *wl)
 			info->status.rates[0].idx = -1;
 			info->status.rates[0].count = 0;
 
-			ieee80211_tx_status_ni(wl->hw, skb);
+			ieee80211_tx_status_ni(cc->hw, skb);
 		}
 	}
 }
 
 #define CC33XX_TX_FLUSH_TIMEOUT 500000
 
-/* caller must *NOT* hold wl->mutex */
-void cc33xx_tx_flush(struct cc33xx *wl)
+/* caller must *NOT* hold cc->mutex */
+void cc33xx_tx_flush(struct cc33xx *cc)
 {
 	unsigned long timeout, start_time;
 	int i;
@@ -1174,30 +1174,30 @@ void cc33xx_tx_flush(struct cc33xx *wl)
 	timeout = start_time + usecs_to_jiffies(CC33XX_TX_FLUSH_TIMEOUT);
 
 	/* only one flush should be in progress, for consistent queue state */
-	mutex_lock(&wl->flush_mutex);
+	mutex_lock(&cc->flush_mutex);
 
-	mutex_lock(&wl->mutex);
-	if (wl->tx_frames_cnt == 0 && cc33xx_tx_total_queue_count(wl) == 0) {
-		mutex_unlock(&wl->mutex);
+	mutex_lock(&cc->mutex);
+	if (cc->tx_frames_cnt == 0 && cc33xx_tx_total_queue_count(cc) == 0) {
+		mutex_unlock(&cc->mutex);
 		goto out;
 	}
 
-	wlcore_stop_queues(wl, WLCORE_QUEUE_STOP_REASON_FLUSH);
+	cc33xx_stop_queues(cc, CC33XX_QUEUE_STOP_REASON_FLUSH);
 
 	while (!time_after(jiffies, timeout)) {
 		cc33xx_debug(DEBUG_MAC80211, "flushing tx buffer: %d %d",
-			     wl->tx_frames_cnt,
-			     cc33xx_tx_total_queue_count(wl));
+			     cc->tx_frames_cnt,
+			     cc33xx_tx_total_queue_count(cc));
 
 		/* force Tx and give the driver some time to flush data */
-		mutex_unlock(&wl->mutex);
-		if (cc33xx_tx_total_queue_count(wl))
-			cc33xx_tx_work(&wl->tx_work);
+		mutex_unlock(&cc->mutex);
+		if (cc33xx_tx_total_queue_count(cc))
+			cc33xx_tx_work(&cc->tx_work);
 		msleep(20);
-		mutex_lock(&wl->mutex);
+		mutex_lock(&cc->mutex);
 
-		if ((wl->tx_frames_cnt == 0) &&
-		    (cc33xx_tx_total_queue_count(wl) == 0)) {
+		if ((cc->tx_frames_cnt == 0) &&
+		    (cc33xx_tx_total_queue_count(cc) == 0)) {
 			cc33xx_debug(DEBUG_MAC80211, "tx flush took %d ms",
 				     jiffies_to_msecs(jiffies - start_time));
 			goto out_wake;
@@ -1210,16 +1210,16 @@ void cc33xx_tx_flush(struct cc33xx *wl)
 
 	/* forcibly flush all Tx buffers on our queues */
 	for (i = 0; i < CC33XX_MAX_LINKS; i++)
-		cc33xx_tx_reset_link_queues(wl, i);
+		cc33xx_tx_reset_link_queues(cc, i);
 
 out_wake:
-	wlcore_wake_queues(wl, WLCORE_QUEUE_STOP_REASON_FLUSH);
-	mutex_unlock(&wl->mutex);
+	cc33xx_wake_queues(cc, CC33XX_QUEUE_STOP_REASON_FLUSH);
+	mutex_unlock(&cc->mutex);
 out:
-	mutex_unlock(&wl->flush_mutex);
+	mutex_unlock(&cc->flush_mutex);
 }
 
-u32 cc33xx_tx_min_rate_get(struct cc33xx *wl, u32 rate_set)
+u32 cc33xx_tx_min_rate_get(struct cc33xx *cc, u32 rate_set)
 {
 	if (WARN_ON(!rate_set))
 		return 0;
@@ -1227,100 +1227,100 @@ u32 cc33xx_tx_min_rate_get(struct cc33xx *wl, u32 rate_set)
 	return BIT(__ffs(rate_set));
 }
 
-void wlcore_stop_queue_locked(struct cc33xx *wl, struct cc33xx_vif *wlvif,
-			      u8 queue, enum wlcore_queue_stop_reason reason)
+void cc33xx_stop_queue_locked(struct cc33xx *cc, struct cc33xx_vif *wlvif,
+			      u8 queue, enum cc33xx_queue_stop_reason reason)
 {
-	int hwq = wlcore_tx_get_mac80211_queue(wlvif, queue);
-	bool stopped = !!wl->queue_stop_reasons[hwq];
+	int hwq = cc33xx_tx_get_mac80211_queue(wlvif, queue);
+	bool stopped = !!cc->queue_stop_reasons[hwq];
 
 	/* queue should not be stopped for this reason */
-	WARN_ON_ONCE(test_and_set_bit(reason, &wl->queue_stop_reasons[hwq]));
+	WARN_ON_ONCE(test_and_set_bit(reason, &cc->queue_stop_reasons[hwq]));
 
 	if (stopped)
 		return;
 
-	ieee80211_stop_queue(wl->hw, hwq);
+	ieee80211_stop_queue(cc->hw, hwq);
 }
 
-void wlcore_stop_queues(struct cc33xx *wl,
-			enum wlcore_queue_stop_reason reason)
+void cc33xx_stop_queues(struct cc33xx *cc,
+			enum cc33xx_queue_stop_reason reason)
 {
 	int i;
 	unsigned long flags;
 
-	spin_lock_irqsave(&wl->wl_lock, flags);
+	spin_lock_irqsave(&cc->wl_lock, flags);
 
 	/* mark all possible queues as stopped */
-	for (i = 0; i < WLCORE_NUM_MAC_ADDRESSES * NUM_TX_QUEUES; i++) {
+	for (i = 0; i < CC33XX_NUM_MAC_ADDRESSES * NUM_TX_QUEUES; i++) {
 		WARN_ON_ONCE(test_and_set_bit(reason,
-					      &wl->queue_stop_reasons[i]));
+					      &cc->queue_stop_reasons[i]));
 	}
 
 	/* use the global version to make sure all vifs in mac80211 we don't
 	 * know are stopped.
 	 */
-	ieee80211_stop_queues(wl->hw);
+	ieee80211_stop_queues(cc->hw);
 
-	spin_unlock_irqrestore(&wl->wl_lock, flags);
+	spin_unlock_irqrestore(&cc->wl_lock, flags);
 }
 
-void wlcore_wake_queues(struct cc33xx *wl,
-			enum wlcore_queue_stop_reason reason)
+void cc33xx_wake_queues(struct cc33xx *cc,
+			enum cc33xx_queue_stop_reason reason)
 {
 	int i;
 	unsigned long flags;
 
-	spin_lock_irqsave(&wl->wl_lock, flags);
+	spin_lock_irqsave(&cc->wl_lock, flags);
 
 	/* mark all possible queues as awake */
-	for (i = 0; i < WLCORE_NUM_MAC_ADDRESSES * NUM_TX_QUEUES; i++) {
+	for (i = 0; i < CC33XX_NUM_MAC_ADDRESSES * NUM_TX_QUEUES; i++) {
 		WARN_ON_ONCE(!test_and_clear_bit(reason,
-						 &wl->queue_stop_reasons[i]));
+						 &cc->queue_stop_reasons[i]));
 	}
 
 	/* use the global version to make sure all vifs in mac80211 we don't
 	 * know are woken up.
 	 */
-	ieee80211_wake_queues(wl->hw);
+	ieee80211_wake_queues(cc->hw);
 
-	spin_unlock_irqrestore(&wl->wl_lock, flags);
+	spin_unlock_irqrestore(&cc->wl_lock, flags);
 }
 
-bool wlcore_is_queue_stopped_by_reason(struct cc33xx *wl,
+bool cc33xx_is_queue_stopped_by_reason(struct cc33xx *cc,
 				       struct cc33xx_vif *wlvif, u8 queue,
-				       enum wlcore_queue_stop_reason reason)
+				       enum cc33xx_queue_stop_reason reason)
 {
 	unsigned long flags;
 	bool stopped;
 
-	spin_lock_irqsave(&wl->wl_lock, flags);
-	stopped = wlcore_is_queue_stopped_by_reason_locked(wl, wlvif, queue,
+	spin_lock_irqsave(&cc->wl_lock, flags);
+	stopped = cc33xx_is_queue_stopped_by_reason_locked(cc, wlvif, queue,
 							   reason);
-	spin_unlock_irqrestore(&wl->wl_lock, flags);
+	spin_unlock_irqrestore(&cc->wl_lock, flags);
 
 	return stopped;
 }
 
-bool wlcore_is_queue_stopped_by_reason_locked(struct cc33xx *wl,
+bool cc33xx_is_queue_stopped_by_reason_locked(struct cc33xx *cc,
 				       struct cc33xx_vif *wlvif, u8 queue,
-				       enum wlcore_queue_stop_reason reason)
+				       enum cc33xx_queue_stop_reason reason)
 {
-	int hwq = wlcore_tx_get_mac80211_queue(wlvif, queue);
+	int hwq = cc33xx_tx_get_mac80211_queue(wlvif, queue);
 
-	assert_spin_locked(&wl->wl_lock);
-	return test_bit(reason, &wl->queue_stop_reasons[hwq]);
+	assert_spin_locked(&cc->wl_lock);
+	return test_bit(reason, &cc->queue_stop_reasons[hwq]);
 }
 
-bool wlcore_is_queue_stopped_locked(struct cc33xx *wl, struct cc33xx_vif *wlvif,
+bool cc33xx_is_queue_stopped_locked(struct cc33xx *cc, struct cc33xx_vif *wlvif,
 				    u8 queue)
 {
-	int hwq = wlcore_tx_get_mac80211_queue(wlvif, queue);
+	int hwq = cc33xx_tx_get_mac80211_queue(wlvif, queue);
 
-	assert_spin_locked(&wl->wl_lock);
-	return !!wl->queue_stop_reasons[hwq];
+	assert_spin_locked(&cc->wl_lock);
+	return !!cc->queue_stop_reasons[hwq];
 }
 
-static void cc33xx_tx_complete_packet(struct cc33xx *wl, u8 tx_stat_byte,
+static void cc33xx_tx_complete_packet(struct cc33xx *cc, u8 tx_stat_byte,
 				      struct core_fw_status *pCoreFwStatus)
 {
 	struct ieee80211_tx_info *info;
@@ -1332,26 +1332,26 @@ static void cc33xx_tx_complete_packet(struct cc33xx *wl, u8 tx_stat_byte,
 
 	/* check for id legality */
 	if (unlikely(id >= CC33XX_NUM_TX_DESCRIPTORS
-	    || wl->tx_frames[id] == NULL)) {
+	    || cc->tx_frames[id] == NULL)) {
 		cc33xx_warning("illegal id in tx completion: %d", id);
 		
 		print_hex_dump(KERN_DEBUG, "fwInfo local:",
 			       DUMP_PREFIX_OFFSET, 16, 4, (u8*)(pCoreFwStatus),
 			       sizeof(struct core_fw_status), false);
 			    
-		cc33xx_queue_recovery_work(wl);
+		cc33xx_queue_recovery_work(cc);
 		return;
 	}
 
 	/* a zero bit indicates Tx success */
 	tx_success = !(tx_stat_byte & BIT(CC33XX_TX_STATUS_STAT_BIT_IDX));
 
-	skb = wl->tx_frames[id];
+	skb = cc->tx_frames[id];
 	info = IEEE80211_SKB_CB(skb);
 	tx_desc = (struct cc33xx_tx_hw_descr *)skb->data;
 
-	if (cc33xx_is_dummy_packet(wl, skb)) {
-		cc33xx_free_tx_id(wl, id);
+	if (cc33xx_is_dummy_packet(cc, skb)) {
+		cc33xx_free_tx_id(cc, id);
 		return;
 	}
 
@@ -1365,7 +1365,7 @@ static void cc33xx_tx_complete_packet(struct cc33xx *wl, u8 tx_stat_byte,
 	info->status.ack_signal = -1;
 
 	if (!tx_success)
-		wl->stats.retry_count++;
+		cc->stats.retry_count++;
 
 	/*
 	 * TODO: update sequence number for encryption? seems to be
@@ -1377,7 +1377,7 @@ static void cc33xx_tx_complete_packet(struct cc33xx *wl, u8 tx_stat_byte,
 	skb_pull(skb, sizeof(struct cc33xx_tx_hw_descr));
 
 	/* remove TKIP header space if present */
-	if ((wl->quirks & WLCORE_QUIRK_TKIP_HEADER_SPACE) &&
+	if ((cc->quirks & CC33XX_QUIRK_TKIP_HEADER_SPACE) &&
 	    info->control.hw_key &&
 	    info->control.hw_key->cipher == WLAN_CIPHER_SUITE_TKIP) {
 		int hdrlen = ieee80211_get_hdrlen_from_skb(skb);
@@ -1394,51 +1394,51 @@ static void cc33xx_tx_complete_packet(struct cc33xx *wl, u8 tx_stat_byte,
 	 * we should have total_blocks, ac, and hlid
 	 */
 	/* update memory management variables - michal michal michal*/
-	wl->tx_blocks_available += tx_desc->cc33xx_mem.total_mem_blocks;
-	wl->tx_allocated_blocks -= tx_desc->cc33xx_mem.total_mem_blocks;
+	cc->tx_blocks_available += tx_desc->cc33xx_mem.total_mem_blocks;
+	cc->tx_allocated_blocks -= tx_desc->cc33xx_mem.total_mem_blocks;
 	/* per queue */
 
      	/* prevent wrap-around in freed-packets counter */
-	wl->tx_allocated_pkts[tx_desc->ac]--;
+	cc->tx_allocated_pkts[tx_desc->ac]--;
 
 	/* per link */
 	desc_session_idx = (tx_desc->tx_attr & TX_HW_ATTR_SESSION_COUNTER) >> 
 					TX_HW_ATTR_OFST_SESSION_COUNTER;
 	
-	if (wl->session_ids[tx_desc->hlid] == desc_session_idx)
-		wl->links[tx_desc->hlid].allocated_pkts--;
+	if (cc->session_ids[tx_desc->hlid] == desc_session_idx)
+		cc->links[tx_desc->hlid].allocated_pkts--;
 
-	cc33xx_free_tx_id(wl, id);
+	cc33xx_free_tx_id(cc, id);
 
 	/* new mem blocks are available now */
-	clear_bit(CC33XX_FLAG_FW_TX_BUSY, &wl->flags);
+	clear_bit(CC33XX_FLAG_FW_TX_BUSY, &cc->flags);
 
 	/* return the packet to the stack */
-	skb_queue_tail(&wl->deferred_tx_queue, skb);
-	queue_work(wl->freezable_wq, &wl->netstack_work);
+	skb_queue_tail(&cc->deferred_tx_queue, skb);
+	queue_work(cc->freezable_wq, &cc->netstack_work);
 }
 
-void cc33xx_tx_immediate_complete(struct cc33xx *wl)
+void cc33xx_tx_immediate_complete(struct cc33xx *cc)
 {
 	u8 txResultQueueIndex;
 	struct core_fw_status coreFwStatus;
 	u8 i;
 
-	claim_core_status_lock(wl);
-	memcpy(&coreFwStatus, &wl->core_status->fwInfo,
+	claim_core_status_lock(cc);
+	memcpy(&coreFwStatus, &cc->core_status->fwInfo,
 	       sizeof(struct core_fw_status));
 
-	txResultQueueIndex = wl->core_status->fwInfo.txResultQueueIndex;
+	txResultQueueIndex = cc->core_status->fwInfo.txResultQueueIndex;
 	/* Lock guarantees we shadow txResultQueueIndex NOT during 
 	an active transaction. Subsequent references to fwInfo can be done
 	without locking as long we do not pass this index. */
-	release_core_status_lock(wl);
+	release_core_status_lock(cc);
 
 	cc33xx_debug(DEBUG_TX, "last released desc = %d, current idx = %d",
-		     wl->last_fw_rls_idx, txResultQueueIndex);
+		     cc->last_fw_rls_idx, txResultQueueIndex);
 
 	/* nothing to do here */
-	if (wl->last_fw_rls_idx == txResultQueueIndex)
+	if (cc->last_fw_rls_idx == txResultQueueIndex)
 		return;
 
 	/* freed Tx descriptors */
@@ -1452,13 +1452,13 @@ void cc33xx_tx_immediate_complete(struct cc33xx *wl)
 
 	cc33xx_debug(DEBUG_TX, "TX result queue! priv last fw idx %d, "
 		     "current resut index %d ",
-		     wl->last_fw_rls_idx, txResultQueueIndex);
+		     cc->last_fw_rls_idx, txResultQueueIndex);
 	
-	for (i = wl->last_fw_rls_idx; i != txResultQueueIndex;
+	for (i = cc->last_fw_rls_idx; i != txResultQueueIndex;
 	     i = (i + 1) % TX_RESULT_QUEUE_SIZE) {
-		cc33xx_tx_complete_packet(wl, coreFwStatus.txResultQueue[i],
+		cc33xx_tx_complete_packet(cc, coreFwStatus.txResultQueue[i],
 					  &coreFwStatus);
 	}
 
-	wl->last_fw_rls_idx = txResultQueueIndex;
+	cc->last_fw_rls_idx = txResultQueueIndex;
 }

@@ -13,7 +13,7 @@
 
 
 
-#define DRIVER_NAME "wlcore"
+#define DRIVER_NAME "cc33xx"
 #define DRIVER_PREFIX DRIVER_NAME ": "
 
 enum {

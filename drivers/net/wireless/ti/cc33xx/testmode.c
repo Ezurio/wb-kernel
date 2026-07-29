@@ -10,7 +10,7 @@
 
 #include <net/genetlink.h>
 
-#include "wlcore.h"
+#include "cc33xx.h"
 #include "acx.h"
 #include "io.h"
 #include "testmode.h"
@@ -55,7 +55,7 @@ static struct nla_policy cc33xx_tm_policy[CC33XX_TM_ATTR_MAX + 1] = {
 	[CC33XX_TM_ATTR_PLT_MODE] =	{ .type = NLA_U32 },
 };
 
-static int cc33xx_tm_cmd_test(struct cc33xx *wl, struct nlattr *tb[])
+static int cc33xx_tm_cmd_test(struct cc33xx *cc, struct nlattr *tb[])
 {
 	int buf_len, ret, len;
 	struct sk_buff *skb;
@@ -76,14 +76,14 @@ static int cc33xx_tm_cmd_test(struct cc33xx *wl, struct nlattr *tb[])
 	if (buf_len > sizeof(struct cc33xx_command))
 		return -EMSGSIZE;
 
-	mutex_lock(&wl->mutex);
+	mutex_lock(&cc->mutex);
 
-	if (unlikely(wl->state != WLCORE_STATE_ON)) {
+	if (unlikely(cc->state != CC33XX_STATE_ON)) {
 		ret = -EINVAL;
 		goto out;
 	}
 
-	ret = cc33xx_cmd_test(wl, buf, buf_len, answer);
+	ret = cc33xx_cmd_test(cc, buf, buf_len, answer);
 	if (ret < 0) {
 		cc33xx_warning("testmode cmd test failed: %d", ret);
 		goto out;
@@ -91,7 +91,7 @@ static int cc33xx_tm_cmd_test(struct cc33xx *wl, struct nlattr *tb[])
 
 	if (answer) {
 		len = nla_total_size(buf_len);
-		skb = cfg80211_testmode_alloc_reply_skb(wl->hw->wiphy, len);
+		skb = cfg80211_testmode_alloc_reply_skb(cc->hw->wiphy, len);
 		if (!skb) {
 			ret = -ENOMEM;
 			goto out;
@@ -107,12 +107,12 @@ static int cc33xx_tm_cmd_test(struct cc33xx *wl, struct nlattr *tb[])
 	}
 
 out:
-	mutex_unlock(&wl->mutex);
+	mutex_unlock(&cc->mutex);
 
 	return ret;
 }
 
-static int cc33xx_tm_cmd_interrogate(struct cc33xx *wl, struct nlattr *tb[])
+static int cc33xx_tm_cmd_interrogate(struct cc33xx *cc, struct nlattr *tb[])
 {
 	int ret;
 	struct cc33xx_command *cmd;
@@ -128,9 +128,9 @@ static int cc33xx_tm_cmd_interrogate(struct cc33xx *wl, struct nlattr *tb[])
 
 	cc33xx_debug(DEBUG_TESTMODE, "testmode cmd interrogate id %d", ie_id);
 
-	mutex_lock(&wl->mutex);
+	mutex_lock(&cc->mutex);
 
-	if (unlikely(wl->state != WLCORE_STATE_ON)) {
+	if (unlikely(cc->state != CC33XX_STATE_ON)) {
 		ret = -EINVAL;
 		goto out;
 	}
@@ -141,14 +141,14 @@ static int cc33xx_tm_cmd_interrogate(struct cc33xx *wl, struct nlattr *tb[])
 		goto out;
 	}
 
-	ret = cc33xx_cmd_debug_inter(wl, ie_id, cmd,
+	ret = cc33xx_cmd_debug_inter(cc, ie_id, cmd,
 				     sizeof(struct acx_header), sizeof(*cmd));
 	if (ret < 0) {
 		cc33xx_warning("testmode cmd interrogate failed: %d", ret);
 		goto out_free;
 	}
 
-	skb = cfg80211_testmode_alloc_reply_skb(wl->hw->wiphy, sizeof(*cmd));
+	skb = cfg80211_testmode_alloc_reply_skb(cc->hw->wiphy, sizeof(*cmd));
 	if (!skb) {
 		ret = -ENOMEM;
 		goto out_free;
@@ -168,12 +168,12 @@ out_free:
 	kfree(cmd);
 
 out:
-	mutex_unlock(&wl->mutex);
+	mutex_unlock(&cc->mutex);
 
 	return ret;
 }
 
-static int cc33xx_tm_cmd_configure(struct cc33xx *wl, struct nlattr *tb[])
+static int cc33xx_tm_cmd_configure(struct cc33xx *cc, struct nlattr *tb[])
 {
 	int buf_len, ret;
 	void *buf;
@@ -193,9 +193,9 @@ static int cc33xx_tm_cmd_configure(struct cc33xx *wl, struct nlattr *tb[])
 	if (buf_len > sizeof(struct cc33xx_command))
 		return -EMSGSIZE;
 
-	mutex_lock(&wl->mutex);
-	ret = cc33xx_cmd_debug(wl, ie_id, buf, buf_len);
-	mutex_unlock(&wl->mutex);
+	mutex_lock(&cc->mutex);
+	ret = cc33xx_cmd_debug(cc, ie_id, buf, buf_len);
+	mutex_unlock(&cc->mutex);
 
 	if (ret < 0) {
 		cc33xx_warning("testmode cmd configure failed: %d", ret);
@@ -206,7 +206,7 @@ static int cc33xx_tm_cmd_configure(struct cc33xx *wl, struct nlattr *tb[])
 }
 
 static
-int cc33xx_plt_init(struct cc33xx *wl)
+int cc33xx_plt_init(struct cc33xx *cc)
 {
 	/* PLT init: Role enable + Role start + plt Init  */
 	int ret=0;
@@ -215,7 +215,7 @@ int cc33xx_plt_init(struct cc33xx *wl)
 	u8  returned_role_id = CC33XX_INVALID_ROLE_ID;
 	u8 bcast_addr[ETH_ALEN] = {0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
 	
-	ret = cc33xx_cmd_role_enable(wl, bcast_addr, 
+	ret = cc33xx_cmd_role_enable(cc, bcast_addr, 
 					ROLE_TRANSCEIVER, &returned_role_id);
 	if(ret < 0) {
 		cc33xx_info("PLT init Role Enable FAILED! , PLT roleID is: %u ", 
@@ -223,16 +223,16 @@ int cc33xx_plt_init(struct cc33xx *wl)
 		goto out;
 	}
 	
-	ret = cc33xx_cmd_role_start_transceiver(wl, returned_role_id);
+	ret = cc33xx_cmd_role_start_transceiver(cc, returned_role_id);
 	if(ret < 0) {
 		cc33xx_info("PLT init Role Start FAILED! , PLT roleID is: %u ", 
 			    returned_role_id);
-		cc33xx_cmd_role_disable(wl, &returned_role_id);
+		cc33xx_cmd_role_disable(cc, &returned_role_id);
 		goto out;
 	}
 
-	wl->plt_role_id = returned_role_id;
-	ret = cc33xx_cmd_plt_enable(wl, returned_role_id);
+	cc->plt_role_id = returned_role_id;
+	ret = cc33xx_cmd_plt_enable(cc, returned_role_id);
 	
 	if(ret >= 0) {
 		cc33xx_info("PLT init Role Start succeed!, PLT roleID is: %u ", 
@@ -247,13 +247,13 @@ out:
 }
 
 static
-int cc33xx_plt_start(struct cc33xx *wl, const enum plt_mode plt_mode)
+int cc33xx_plt_start(struct cc33xx *cc, const enum plt_mode plt_mode)
 {
 	int ret = 0;
 
-	mutex_lock(&wl->mutex);
+	mutex_lock(&cc->mutex);
 
-	if(plt_mode == PLT_ON && wl->plt_mode == PLT_ON) {
+	if(plt_mode == PLT_ON && cc->plt_mode == PLT_ON) {
 		cc33xx_error("PLT already on");
 		ret = 0;
 		goto out;
@@ -262,7 +262,7 @@ int cc33xx_plt_start(struct cc33xx *wl, const enum plt_mode plt_mode)
 	cc33xx_notice("PLT start");
 
 	if (plt_mode != PLT_CHIP_AWAKE) {
-		ret = cc33xx_plt_init(wl);
+		ret = cc33xx_plt_init(cc);
 		if (ret < 0) {
 			cc33xx_error("PLT start failed");
 			goto out;
@@ -270,36 +270,36 @@ int cc33xx_plt_start(struct cc33xx *wl, const enum plt_mode plt_mode)
 	}
 
 	/* Indicate to lower levels that we are now in PLT mode */
-	wl->plt = true;
-	wl->plt_mode = plt_mode;
+	cc->plt = true;
+	cc->plt_mode = plt_mode;
 
 out:
-	mutex_unlock(&wl->mutex);
+	mutex_unlock(&cc->mutex);
 
 	return ret;
 }
 
-static int cc33xx_tm_detect_fem(struct cc33xx *wl, struct nlattr *tb[])
+static int cc33xx_tm_detect_fem(struct cc33xx *cc, struct nlattr *tb[])
 {
 	/* return FEM type */
 	int ret, len;
 	struct sk_buff *skb;
 
-	ret = cc33xx_plt_start(wl, PLT_FEM_DETECT);
+	ret = cc33xx_plt_start(cc, PLT_FEM_DETECT);
 	if (ret < 0)
 		goto out;
 
-	mutex_lock(&wl->mutex);
+	mutex_lock(&cc->mutex);
 
-	len = nla_total_size(sizeof(wl->fem_manuf));
-	skb = cfg80211_testmode_alloc_reply_skb(wl->hw->wiphy, len);
+	len = nla_total_size(sizeof(cc->fem_manuf));
+	skb = cfg80211_testmode_alloc_reply_skb(cc->hw->wiphy, len);
 	if (!skb) {
 		ret = -ENOMEM;
 		goto out_mutex;
 	}
 
-	if (nla_put(skb, CC33XX_TM_ATTR_DATA, sizeof(wl->fem_manuf),
-					      &wl->fem_manuf)) {
+	if (nla_put(skb, CC33XX_TM_ATTR_DATA, sizeof(cc->fem_manuf),
+					      &cc->fem_manuf)) {
 		kfree_skb(skb);
 		ret = -EMSGSIZE;
 		goto out_mutex;
@@ -308,15 +308,15 @@ static int cc33xx_tm_detect_fem(struct cc33xx *wl, struct nlattr *tb[])
 	ret = cfg80211_testmode_reply(skb);
 
 out_mutex:
-	mutex_unlock(&wl->mutex);
+	mutex_unlock(&cc->mutex);
 
 	/* We always stop plt after DETECT mode */
-	cc33xx_plt_stop(wl);
+	cc33xx_plt_stop(cc);
 out:
 	return ret;
 }
 
-static int cc33xx_tm_cmd_set_plt_mode(struct cc33xx *wl, struct nlattr *tb[])
+static int cc33xx_tm_cmd_set_plt_mode(struct cc33xx *cc, struct nlattr *tb[])
 {
 	u32 val;
 	int ret;
@@ -330,14 +330,14 @@ static int cc33xx_tm_cmd_set_plt_mode(struct cc33xx *wl, struct nlattr *tb[])
 
 	switch (val) {
 	case PLT_OFF:
-		ret = cc33xx_plt_stop(wl);
+		ret = cc33xx_plt_stop(cc);
 		break;
 	case PLT_ON:
 	case PLT_CHIP_AWAKE:
-		ret = cc33xx_plt_start(wl, val);
+		ret = cc33xx_plt_start(cc, val);
 		break;
 	case PLT_FEM_DETECT:
-		ret = cc33xx_tm_detect_fem(wl, tb);
+		ret = cc33xx_tm_detect_fem(cc, tb);
 		break;
 	default:
 		ret = -EINVAL;
@@ -347,32 +347,32 @@ static int cc33xx_tm_cmd_set_plt_mode(struct cc33xx *wl, struct nlattr *tb[])
 	return ret;
 }
 
-static int cc33xx_tm_cmd_get_mac(struct cc33xx *wl, struct nlattr *tb[])
+static int cc33xx_tm_cmd_get_mac(struct cc33xx *cc, struct nlattr *tb[])
 {
 	struct sk_buff *skb;
 	u8 zero_mac[ETH_ALEN] = {0};
 	int ret = 0;
 
-	mutex_lock(&wl->mutex);
+	mutex_lock(&cc->mutex);
 
-	if (!wl->plt) {
+	if (!cc->plt) {
 		ret = -EINVAL;
 		goto out;
 	}
 
-	if (0 == memcmp(zero_mac, wl->efuse_mac_address, ETH_ALEN)) {
+	if (0 == memcmp(zero_mac, cc->efuse_mac_address, ETH_ALEN)) {
 		ret = -EOPNOTSUPP;
 		goto out;
 	}
 
-	skb = cfg80211_testmode_alloc_reply_skb(wl->hw->wiphy, ETH_ALEN);
+	skb = cfg80211_testmode_alloc_reply_skb(cc->hw->wiphy, ETH_ALEN);
 	if (!skb) {
 		ret = -ENOMEM;
 		goto out;
 	}
 
 	if (nla_put(skb, CC33XX_TM_ATTR_DATA,
-		    ETH_ALEN, wl->efuse_mac_address)) {
+		    ETH_ALEN, cc->efuse_mac_address)) {
 		kfree_skb(skb);
 		ret = -EMSGSIZE;
 		goto out;
@@ -383,18 +383,18 @@ static int cc33xx_tm_cmd_get_mac(struct cc33xx *wl, struct nlattr *tb[])
 		goto out;
 
 out:
-	mutex_unlock(&wl->mutex);
+	mutex_unlock(&cc->mutex);
 	return ret;
 }
 
-static int cc33xx_tm_cmd_get_domain(struct cc33xx *wl, struct nlattr *tb[])
+static int cc33xx_tm_cmd_get_domain(struct cc33xx *cc, struct nlattr *tb[])
 {
 	struct sk_buff *skb;
 	int ret = 0;
 
-	mutex_lock(&wl->mutex);
+	mutex_lock(&cc->mutex);
 
-	skb = cfg80211_testmode_alloc_reply_skb(wl->hw->wiphy, REGDOMAIN_LEN);
+	skb = cfg80211_testmode_alloc_reply_skb(cc->hw->wiphy, REGDOMAIN_LEN);
 	if (!skb) {
 		ret = -ENOMEM;
 		goto out;
@@ -412,14 +412,14 @@ static int cc33xx_tm_cmd_get_domain(struct cc33xx *wl, struct nlattr *tb[])
 		goto out;
 
 out:
-	mutex_unlock(&wl->mutex);
+	mutex_unlock(&cc->mutex);
 	return ret;
 }
 
 int cc33xx_tm_cmd(struct ieee80211_hw *hw, struct ieee80211_vif *vif,
 		  void *data, int len)
 {
-	struct cc33xx *wl = hw->priv;
+	struct cc33xx *cc = hw->priv;
 	struct nlattr *tb[CC33XX_TM_ATTR_MAX + 1];
 	u32 nla_cmd;
 	int err;
@@ -435,23 +435,23 @@ int cc33xx_tm_cmd(struct ieee80211_hw *hw, struct ieee80211_vif *vif,
 	nla_cmd = nla_get_u32(tb[CC33XX_TM_ATTR_CMD_ID]);
 
 	/* Only SET_PLT_MODE is allowed in case of mode PLT_CHIP_AWAKE */
-	if (wl->plt_mode == PLT_CHIP_AWAKE &&
+	if (cc->plt_mode == PLT_CHIP_AWAKE &&
 	    nla_cmd != CC33XX_TM_CMD_SET_PLT_MODE)
 		return -EOPNOTSUPP;
 
 	switch (nla_cmd) {
 	case CC33XX_TM_CMD_TEST:
-		return cc33xx_tm_cmd_test(wl, tb);
+		return cc33xx_tm_cmd_test(cc, tb);
 	case CC33XX_TM_CMD_INTERROGATE:
-		return cc33xx_tm_cmd_interrogate(wl, tb);
+		return cc33xx_tm_cmd_interrogate(cc, tb);
 	case CC33XX_TM_CMD_CONFIGURE:
-		return cc33xx_tm_cmd_configure(wl, tb);
+		return cc33xx_tm_cmd_configure(cc, tb);
 	case CC33XX_TM_CMD_SET_PLT_MODE:
-		return cc33xx_tm_cmd_set_plt_mode(wl, tb);
+		return cc33xx_tm_cmd_set_plt_mode(cc, tb);
 	case CC33XX_TM_CMD_GET_MAC:
-		return cc33xx_tm_cmd_get_mac(wl, tb);
+		return cc33xx_tm_cmd_get_mac(cc, tb);
 	case CC33XX_TM_CMD_EZ_DOMAIN:
-		return cc33xx_tm_cmd_get_domain(wl, tb);
+		return cc33xx_tm_cmd_get_domain(cc, tb);
 	default:
 		return -EOPNOTSUPP;
 	}

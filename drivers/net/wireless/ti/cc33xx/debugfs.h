@@ -10,15 +10,15 @@
 #ifndef __DEBUGFS_H__
 #define __DEBUGFS_H__
 
-#include "wlcore.h"
+#include "cc33xx.h"
 
 __printf(4, 5) int cc33xx_format_buffer(char __user *userbuf, size_t count,
 					loff_t *ppos, char *fmt, ...);
 
-int cc33xx_debugfs_init(struct cc33xx *wl);
-void cc33xx_debugfs_exit(struct cc33xx *wl);
-void cc33xx_debugfs_reset(struct cc33xx *wl);
-void cc33xx_debugfs_update_stats(struct cc33xx *wl);
+int cc33xx_debugfs_init(struct cc33xx *cc);
+void cc33xx_debugfs_exit(struct cc33xx *cc);
+void cc33xx_debugfs_reset(struct cc33xx *cc);
+void cc33xx_debugfs_update_stats(struct cc33xx *cc);
 
 #define DEBUGFS_FORMAT_BUFFER_SIZE 256
 
@@ -26,7 +26,7 @@ void cc33xx_debugfs_update_stats(struct cc33xx *wl);
 static ssize_t name## _read(struct file *file, char __user *userbuf,	\
 			    size_t count, loff_t *ppos)			\
 {									\
-	struct cc33xx *wl = file->private_data;				\
+	struct cc33xx *cc = file->private_data;				\
 	return cc33xx_format_buffer(userbuf, count, ppos,		\
 				    fmt "\n", ##value);			\
 }									\
@@ -40,14 +40,14 @@ static const struct file_operations name## _ops = {			\
 #define DEBUGFS_ADD(name, parent)					\
 	do {								\
 		debugfs_create_file(#name, 0400, parent,		\
-				    wl, &name## _ops);			\
+				    cc, &name## _ops);			\
 	} while (0)
 
 
 #define DEBUGFS_ADD_PREFIX(prefix, name, parent)			\
 	do {								\
 		debugfs_create_file(#name, 0400, parent,		\
-				    wl, &prefix## _## name## _ops);	\
+				    cc, &prefix## _## name## _ops);	\
 	} while (0)
 
 #define DEBUGFS_FWSTATS_FILE(sub, name, fmt, struct_type)		\
@@ -55,10 +55,10 @@ static ssize_t sub## _ ##name## _read(struct file *file,		\
 				      char __user *userbuf,		\
 				      size_t count, loff_t *ppos)	\
 {									\
-	struct cc33xx *wl = file->private_data;				\
-	struct struct_type *stats = wl->stats.fw_stats;			\
+	struct cc33xx *cc = file->private_data;				\
+	struct struct_type *stats = cc->stats.fw_stats;			\
 									\
-	cc33xx_debugfs_update_stats(wl);				\
+	cc33xx_debugfs_update_stats(cc);				\
 									\
 	return cc33xx_format_buffer(userbuf, count, ppos, fmt "\n",	\
 				    stats->sub.name);			\
@@ -75,12 +75,12 @@ static ssize_t sub## _ ##name## _read(struct file *file,		\
 				      char __user *userbuf,		\
 				      size_t count, loff_t *ppos)	\
 {									\
-	struct cc33xx *wl = file->private_data;				\
-	struct struct_type *stats = wl->stats.fw_stats;			\
+	struct cc33xx *cc = file->private_data;				\
+	struct struct_type *stats = cc->stats.fw_stats;			\
 	char buf[DEBUGFS_FORMAT_BUFFER_SIZE] = "";			\
 	int res, i, off;						\
 									\
-	cc33xx_debugfs_update_stats(wl);				\
+	cc33xx_debugfs_update_stats(cc);				\
 									\
 	for (i = 0, off = 0; i < len; i++, off += res) {		\
 		res = snprintf(buf + off, sizeof(buf) - off,		\

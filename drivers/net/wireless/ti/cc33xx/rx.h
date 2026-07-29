@@ -53,9 +53,9 @@ enum {
 
 /* Describes the alignment state of a Rx buffer */
 enum wl_rx_buf_align {
-	WLCORE_RX_BUF_ALIGNED,
-	WLCORE_RX_BUF_UNALIGNED,
-	WLCORE_RX_BUF_PADDED,
+	CC33XX_RX_ALIGNED,
+	CC33XX_RX_UNALIGNED,
+	CC33XX_RX_PADDED,
 };
 
 enum wl_rx_curr_status
@@ -92,25 +92,29 @@ struct partial_rx_frame{
 };
 
 
-int wlcore_rx(struct cc33xx *wl, u8 *rx_buf_ptr, u16 rx_buf_len);
-int cc33xx_rx_filter_enable(struct cc33xx *wl, int index, bool enable,
+int cc33xx_rx(struct cc33xx *cc, u8 *rx_buf_ptr, u16 rx_buf_len);
+int cc33xx_rx_filter_enable(struct cc33xx *cc, int index, bool enable,
 			    struct cc33xx_rx_filter *filter);
-int cc33xx_rx_filter_clear_all(struct cc33xx *wl);
-void cc33xx_flush_deferred_work(struct cc33xx *wl);                                                                                  
-void cc33xx_free_wowlan_patterns_memory(struct cc33xx *wl);
+int cc33xx_rx_filter_clear_all(struct cc33xx *cc);
+void cc33xx_flush_deferred_work(struct cc33xx *cc);                                                                                            
+void cc33xx_free_wowlan_patterns_memory(struct cc33xx *cc);
 int cc33xx_rx_filter_alloc_field(struct cc33xx_rx_filter *filter, u16 offset,
 				 u8 flags, const u8 *pattern, u8 len);
 struct cc33xx_rx_filter *cc33xx_rx_filter_alloc(void);
-int cc33xx_clear_wowlan_search_patterns(struct cc33xx *wl);
-int cc33xx_set_wowlan_search_mode(struct cc33xx *wl, bool enable);
+int cc33xx_clear_wowlan_search_patterns(struct cc33xx *cc);
+int cc33xx_set_wowlan_search_mode(struct cc33xx *cc, bool enable);
 void cc33xx_rx_filter_free(struct cc33xx_rx_filter *filter);
-int cc33xx_get_wowlan_search_filters(struct cc33xx *wl, struct cc33xx_rx_filter ***filters_out);
-int cc33xx_parse_wowlan_search_pattern(const char *input, u8 *pattern, u8 *mask,
-					size_t max_len, bool *has_mask);
+int cc33xx_get_wowlan_search_filters(struct cc33xx *cc, struct cc33xx_rx_filter ***filters_out);
+int cc33xx_parse_wowlan_hex_string(const char *input, u8 *pattern, u8 *mask,
+				   size_t max_len, bool *has_mask);
+int cc33xx_parse_wowlan_search_pattern(char *input,
+					u8 *header_bytes, int *header_len,
+					u8 *header_mask, bool *header_has_mask,
+					u8 *payload_bytes, int *payload_len,
+					u8 *payload_mask, bool *payload_has_mask,
+					u16 *payload_offsett, bool *search_mode);
 int cc33xx_is_wowlan_search_enabled(struct cc33xx *wl);
-int cc33xx_add_wowlan_search_pattern(struct cc33xx *wl, u16 offset,
-				     const u8 *pattern_data, int pattern_len,
-				     bool has_mask);
+int cc33xx_add_wowlan_search_pattern(struct cc33xx *wl, char *input);
 
 
 #endif /* __RX_H__ */

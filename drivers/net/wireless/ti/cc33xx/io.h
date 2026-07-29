@@ -14,22 +14,20 @@
 
 struct cc33xx;
 
-void wlcore_disable_interrupts_nosync(struct cc33xx *wl);
-void wlcore_enable_interrupts(struct cc33xx *wl);
-void wlcore_sync_interrupts(struct cc33xx *wl);
-void cc33xx_io_reset(struct cc33xx *wl);
-void cc33xx_io_init(struct cc33xx *wl);
-int __must_check wlcore_raw_read(struct cc33xx *wl, int addr,
+void cc33xx_disable_interrupts_nosync(struct cc33xx *cc);
+void cc33xx_enable_interrupts(struct cc33xx *cc);
+void cc33xx_sync_interrupts(struct cc33xx *cc);
+void cc33xx_io_reset(struct cc33xx *cc);
+void cc33xx_io_init(struct cc33xx *cc);
+int __must_check cc33xx_raw_read(struct cc33xx *cc, int addr,
 				 void *buf, size_t len, bool fixed);
-int __must_check wlcore_write(struct cc33xx *wl, int addr,
+int __must_check cc33xx_write(struct cc33xx *cc, int addr,
 			      void *buf, size_t len, bool fixed);
-void claim_core_status_lock(struct cc33xx *wl);
-void release_core_status_lock(struct cc33xx *wl);
-void cc33xx_power_off(struct cc33xx *wl);
-int cc33xx_power_on(struct cc33xx *wl);
-int wlcore_translate_addr(struct cc33xx *wl, int addr);
-bool cc33xx_set_block_size(struct cc33xx *wl);
-int wlcore_probe(struct cc33xx *wl, struct platform_device *pdev);
+void claim_core_status_lock(struct cc33xx *cc);
+void release_core_status_lock(struct cc33xx *cc);
+void cc33xx_power_off(struct cc33xx *cc);
+int cc33xx_power_on(struct cc33xx *cc);
+bool cc33xx_set_block_size(struct cc33xx *cc);
 
 
 #endif /* __IO_H__ */

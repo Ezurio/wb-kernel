@@ -61,21 +61,21 @@ enum {
 };
 
 /* events the driver might want to wait for */
-enum wlcore_wait_event {
-	WLCORE_EVENT_ROLE_STOP_COMPLETE,
-	WLCORE_EVENT_PEER_REMOVE_COMPLETE,
-	WLCORE_EVENT_DFS_CONFIG_COMPLETE
+enum cc33xx_wait_event {
+	CC33XX_EVENT_ROLE_STOP_COMPLETE,
+	CC33XX_EVENT_PEER_REMOVE_COMPLETE,
+	CC33XX_EVENT_DFS_CONFIG_COMPLETE
 };
 
 #define NUM_OF_RSSI_SNR_TRIGGERS 8
 
 struct cc33xx;
 
-int cc33xx_wait_for_event(struct cc33xx *wl, enum wlcore_wait_event event,
+int cc33xx_wait_for_event(struct cc33xx *cc, enum cc33xx_wait_event event,
 			  bool *timeout);
-void deffer_event(struct cc33xx *wl, const void *event_payload, size_t event_length);
-void process_deferred_events(struct cc33xx *wl);
-void flush_deferred_event_list(struct cc33xx *wl);
+void deffer_event(struct cc33xx *cc, const void *event_payload, size_t event_length);
+void process_deferred_events(struct cc33xx *cc);
+void flush_deferred_event_list(struct cc33xx *cc);
 
 
 #endif /* __EVENT_H__ */

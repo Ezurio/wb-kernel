@@ -5,22 +5,22 @@
  * Copyright (C) 2011 Texas Instruments Inc.
  */
 
-#ifndef __WLCORE_H__
-#define __WLCORE_H__
+#ifndef __CC33XX_H__
+#define __CC33XX_H__
 
-#include "wlcore_i.h"
+#include "cc33xx_i.h"
 #include "rx.h"
 
 
 /* Wireless Driver Version */
 #define MAJOR_VERSION 	1
 #define MINOR_VERSION 	7
-#define API_VERSION 	2
-#define BUILD_VERSION	239
+#define API_VERSION 	4
+#define BUILD_VERSION	257
 
 
 /* The maximum number of Tx descriptors in all chip families */
-#define WLCORE_MAX_TX_DESCRIPTORS 32
+#define CC33XX_MAX_TX_DESCRIPTORS 32
 
 #define CC33XX_CMD_MAX_SIZE          (896)
 #define CC33XX_INI_PARAM_COMMAND_SIZE (16UL)//size of struct cc33xx_cmd_ini_params_download 
@@ -28,10 +28,7 @@
 
 #define CC33XX_MAX_FW_LOGS_BUFFER_SIZE    ((0x1000) - (sizeof(struct NAB_header))) //a bit under ~4KB
 
-#define CC33XX_CMD_BUFFER_SIZE ((CC33XX_INI_CMD_MAX_SIZE > CC33XX_CMD_MAX_SIZE)\
-				? CC33XX_INI_CMD_MAX_SIZE : CC33XX_CMD_MAX_SIZE)
-
-#define WLCORE_NUM_MAC_ADDRESSES 3
+#define CC33XX_NUM_MAC_ADDRESSES 3
 
 #define CC33XX_AGGR_BUFFER_SIZE		(8 * PAGE_SIZE)
 
@@ -90,7 +87,7 @@ struct cc33xx {
 
 	spinlock_t wl_lock;
 
-	enum wlcore_state state;
+	enum cc33xx_state state;
 	bool plt;
 	enum plt_mode plt_mode;
 	u8 plt_role_id;
@@ -111,7 +108,7 @@ struct cc33xx {
 	size_t nvs_mac_addr_len;
 	struct cc33xx_fw_download *fw_download;
 
-	struct mac_address addresses[WLCORE_NUM_MAC_ADDRESSES];
+	struct mac_address addresses[CC33XX_NUM_MAC_ADDRESSES];
 
 	unsigned long links_map[BITS_TO_LONGS(CC33XX_MAX_LINKS)];
 	unsigned long roles_map[BITS_TO_LONGS(CC33XX_MAX_ROLES)];
@@ -142,7 +139,7 @@ struct cc33xx {
 	/* Frames scheduled for transmission, not handled yet */
 	int tx_queue_count[NUM_TX_QUEUES];
 	unsigned long queue_stop_reasons[
-				NUM_TX_QUEUES * WLCORE_NUM_MAC_ADDRESSES];
+				NUM_TX_QUEUES * CC33XX_NUM_MAC_ADDRESSES];
 
 	/* Frames received, not handled yet by mac80211 */
 	struct sk_buff_head deferred_rx_queue;
@@ -157,8 +154,8 @@ struct cc33xx {
 	struct workqueue_struct *freezable_netstack_wq;
 
 	/* Pending TX frames */
-	unsigned long tx_frames_map[BITS_TO_LONGS(WLCORE_MAX_TX_DESCRIPTORS)];
-	struct sk_buff *tx_frames[WLCORE_MAX_TX_DESCRIPTORS];
+	unsigned long tx_frames_map[BITS_TO_LONGS(CC33XX_MAX_TX_DESCRIPTORS)];
+	struct sk_buff *tx_frames[CC33XX_MAX_TX_DESCRIPTORS];
 	int tx_frames_cnt;
 
 	/* FW Rx counter */
@@ -225,7 +222,7 @@ struct cc33xx {
 	bool enable_11a;
 
 	/* bands supported by this instance of cc33xx */
-	struct ieee80211_supported_band bands[WLCORE_NUM_BANDS];
+	struct ieee80211_supported_band bands[CC33XX_NUM_BANDS];
 
 	/*
 	 * wowlan trigger was configured during suspend.
@@ -233,10 +230,10 @@ struct cc33xx {
 	 */
 
 	bool keep_device_power;
-
+	
 	/* WoWLAN search pattern state */
 	struct cc33xx_wowlan_search wowlan_search;
-	
+
 	/*
 	 * AP-mode - links indexed by HLID. The global and broadcast links
 	 * are always active.
@@ -268,7 +265,7 @@ struct cc33xx {
 	struct delayed_work tx_watchdog_work;
 
 	/* HW HT (11n) capabilities */
-	struct ieee80211_sta_ht_cap ht_cap[WLCORE_NUM_BANDS];
+	struct ieee80211_sta_ht_cap ht_cap[CC33XX_NUM_BANDS];
 
 	/* the current dfs region */
 	enum nl80211_dfs_regions dfs_region;
@@ -286,6 +283,9 @@ struct cc33xx {
 
 	/*ble_enable value - if 0 ble not enabled , if 1 is enabled..cant be disabled after enable*/
 	int ble_enable;
+
+	/* WoWLAN ARP offload: if true, FW will handle incoming ARP requests during suspend */
+	bool wowlan_arp_offload;
 
 	/*fw_crash_logs, allocated upon successfully receiving FW Logs after general error (ie FW assert)*/
 	u8  *fw_crash_logs;
@@ -305,16 +305,11 @@ struct cc33xx {
 
 	u8 sta_role_idx;
 
-	u16 max_cmd_size;
-
 	struct completion nvs_loading_complete;
 	struct completion command_complete;
 
 	/* dynamic fw traces */
 	u32 dynamic_fw_traces;
-
-	/* buffer for sending commands to FW */
-	u8 cmd_buf[CC33XX_CMD_BUFFER_SIZE];
 
 	/* number of keys requiring extra spare mem-blocks */
 	int extra_spare_key_count;
@@ -331,6 +326,8 @@ struct cc33xx {
 
 	u8 antenna_selection;
 
+	u8 is_ext_slw_clk;
+
 	/* burst mode cfg */
 	u8 burst_disable;
 
@@ -340,31 +337,31 @@ struct cc33xx {
 /* Quirks */
 
 /* the first start_role(sta) sometimes doesn't work on wl12xx */
-#define WLCORE_QUIRK_START_STA_FAILS		BIT(1)
+#define CC33XX_QUIRK_START_STA_FAILS		BIT(1)
 
-/* wl127x and SPI don't support SDIO block size alignment */
-#define WLCORE_QUIRK_TX_BLOCKSIZE_ALIGN		BIT(2)
+/* SPI don't support SDIO block size alignment */
+#define CC33XX_QUIRK_TX_BLOCKSIZE_ALIGN		BIT(2)
 
 /* means aggregated Rx packets are aligned to a SDIO block */
-#define WLCORE_QUIRK_RX_BLOCKSIZE_ALIGN		BIT(3)
+#define CC33XX_QUIRK_RX_BLOCKSIZE_ALIGN		BIT(3)
 
 /* pad only the last frame in the aggregate buffer */
-#define WLCORE_QUIRK_TX_PAD_LAST_FRAME		BIT(7)
+#define CC33XX_QUIRK_TX_PAD_LAST_FRAME		BIT(7)
 
 /* extra header space is required for TKIP */
-#define WLCORE_QUIRK_TKIP_HEADER_SPACE		BIT(8)
+#define CC33XX_QUIRK_TKIP_HEADER_SPACE		BIT(8)
 
 /* Some firmwares not support sched scans while connected */
-#define WLCORE_QUIRK_NO_SCHED_SCAN_WHILE_CONN	BIT(9)
+#define CC33XX_QUIRK_NO_SCHED_SCAN_WHILE_CONN	BIT(9)
 
 /* separate probe response templates for one-shot and sched scans */
-#define WLCORE_QUIRK_DUAL_PROBE_TMPL		BIT(10)
+#define CC33XX_QUIRK_DUAL_PROBE_TMPL		BIT(10)
 
 /* Firmware requires reg domain configuration for active calibration */
-#define WLCORE_QUIRK_REGDOMAIN_CONF		BIT(11)
+#define CC33XX_QUIRK_REGDOMAIN_CONF		BIT(11)
 
 /* The FW only support a zero session id for AP */
-#define WLCORE_QUIRK_AP_ZERO_SESSION_ID		BIT(12)
+#define CC33XX_QUIRK_AP_ZERO_SESSION_ID		BIT(12)
 
 /* TODO: move all these common registers and values elsewhere */
 #define HW_ACCESS_ELP_CTRL_REG		0x1FFFC
@@ -502,4 +499,4 @@ struct NAB_rx_header{
 } __packed;
 
 
-#endif /* __WLCORE_H__ */
+#endif /* __CC33XX_H__ */

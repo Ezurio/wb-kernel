@@ -10,7 +10,7 @@
 #ifndef __SCAN_H__
 #define __SCAN_H__
 
-#include "wlcore.h"
+#include "cc33xx.h"
 
 #define CC33XX_SCAN_TIMEOUT    30000 /* msec */
 
@@ -48,7 +48,6 @@ enum {
 #define MAX_CHANNELS_5GHZ	32
 
 #define SCAN_MAX_CYCLE_INTERVALS 16
-#define SCAN_MAX_BANDS 3
 #define SCHED_SCAN_MAX_SSIDS 16
 
 /******************************************************************************
@@ -335,18 +334,18 @@ struct cc33xx_cmd_scan_stop {
 } __packed;
 
 
-int cc33xx_scan_stop(struct cc33xx *wl, struct cc33xx_vif *wlvif);
-void cc33xx_scan_completed(struct cc33xx *wl, struct cc33xx_vif *wlvif);
-int cc33xx_sched_scan_start(struct cc33xx *wl, struct cc33xx_vif *wlvif,
+int cc33xx_scan_stop(struct cc33xx *cc, struct cc33xx_vif *wlvif);
+void cc33xx_scan_completed(struct cc33xx *cc, struct cc33xx_vif *wlvif);
+int cc33xx_sched_scan_start(struct cc33xx *cc, struct cc33xx_vif *wlvif,
 			    struct cfg80211_sched_scan_request *req,
 			    struct ieee80211_scan_ies *ies);
-void cc33xx_scan_sched_scan_stop(struct cc33xx *wl, struct cc33xx_vif *wlvif);
+void cc33xx_scan_sched_scan_stop(struct cc33xx *cc, struct cc33xx_vif *wlvif);
 
-int wlcore_scan(struct cc33xx *wl, struct ieee80211_vif *vif,
+int cc33xx_scan(struct cc33xx *cc, struct ieee80211_vif *vif,
 		const u8 *ssid, size_t ssid_len,
 		struct cfg80211_scan_request *req);
 void cc33xx_scan_complete_work(struct work_struct *work);
-void wlcore_scan_sched_scan_results(struct cc33xx *wl);
+void cc33xx_scan_sched_scan_results(struct cc33xx *cc);
 
 enum {
 	SCAN_SSID_FILTER_ANY      = 0,
@@ -359,9 +358,9 @@ enum {
 						  activity is detected on it */
 #define SCAN_CHANNEL_FLAGS_DFS_ENABLED	BIT(1)
 
-struct wlcore_scan_channels {
-	u8 passive[SCAN_MAX_BANDS]; /* number of passive scan channels */
-	u8 active[SCAN_MAX_BANDS];  /* number of active scan channels */
+struct cc33xx_scan_channels {
+	u8 passive[CONN_SCAN_MAX_BAND]; /* number of passive scan channels */
+	u8 active[CONN_SCAN_MAX_BAND];  /* number of active scan channels */
 	u8 dfs;		   /* number of dfs channels in 5ghz */
 	u8 passive_active; /* number of passive before active channels 2.4ghz */
 

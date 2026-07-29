@@ -10,13 +10,12 @@
 #ifndef __INIT_H__
 #define __INIT_H__
 
-#include "wlcore.h"
+#include "cc33xx.h"
 
 
-int cc33xx_hw_init(struct cc33xx *wl);
-int cc33xx_download_ini_params_and_wait(struct cc33xx *wl);
-int cc33xx_init_vif_specific(struct cc33xx *wl, struct ieee80211_vif *vif);
-int download_static_calibration_data(struct cc33xx *wl);
+int cc33xx_hw_init(struct cc33xx *cc);
+int cc33xx_download_ini_params_and_wait(struct cc33xx *cc);
+int cc33xx_init_vif_specific(struct cc33xx *cc, struct ieee80211_vif *vif);
 
 
 #endif /* __INIT_H__ */

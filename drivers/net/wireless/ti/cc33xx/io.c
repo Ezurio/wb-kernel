@@ -7,16 +7,16 @@
  * Contact: Luciano Coelho <luciano.coelho@nokia.com>
  */
 
-#include "wlcore.h"
+#include "cc33xx.h"
 #include "debug.h"
 #include "io.h"
 #include "tx.h"
 
 
-bool cc33xx_set_block_size(struct cc33xx *wl)
+bool cc33xx_set_block_size(struct cc33xx *cc)
 {
-	if (wl->if_ops->set_block_size) {
-		wl->if_ops->set_block_size(wl->dev, CC33XX_BUS_BLOCK_SIZE);
+	if (cc->if_ops->set_block_size) {
+		cc->if_ops->set_block_size(cc->dev, CC33XX_BUS_BLOCK_SIZE);
 		cc33xx_debug(DEBUG_CC33xx, 
 			"Set BLKsize to %d", CC33XX_BUS_BLOCK_SIZE);
 		return true;
@@ -27,109 +27,109 @@ bool cc33xx_set_block_size(struct cc33xx *wl)
 	return false;
 }
 
-void wlcore_disable_interrupts_nosync(struct cc33xx *wl)
+void cc33xx_disable_interrupts_nosync(struct cc33xx *cc)
 {
-	wl->if_ops->disable_irq(wl->dev);
+	cc->if_ops->disable_irq(cc->dev);
 }
 
-void wlcore_sync_interrupts(struct cc33xx *wl)
+void cc33xx_sync_interrupts(struct cc33xx *cc)
 {
-	wl->if_ops->sync_irq(wl->dev);
+	cc->if_ops->sync_irq(cc->dev);
 }
 
-void wlcore_enable_interrupts(struct cc33xx *wl)
+void cc33xx_enable_interrupts(struct cc33xx *cc)
 {
-	wl->if_ops->enable_irq(wl->dev);
+	cc->if_ops->enable_irq(cc->dev);
 }
 
-void cc33xx_io_reset(struct cc33xx *wl)
+void cc33xx_io_reset(struct cc33xx *cc)
 {
-	if (wl->if_ops->reset)
-		wl->if_ops->reset(wl->dev);
+	if (cc->if_ops->reset)
+		cc->if_ops->reset(cc->dev);
 }
 
-void cc33xx_io_init(struct cc33xx *wl)
+void cc33xx_io_init(struct cc33xx *cc)
 {
-	if (wl->if_ops->init)
-		wl->if_ops->init(wl->dev);
+	if (cc->if_ops->init)
+		cc->if_ops->init(cc->dev);
 }
 
 /* Raw target IO, address is not translated */
-static int __must_check wlcore_raw_write(struct cc33xx *wl, int addr,
+static int __must_check cc33xx_raw_write(struct cc33xx *cc, int addr,
 					 void *buf, size_t len, bool fixed)
 {
 	int ret;
 
-	if (test_bit(CC33XX_FLAG_IO_FAILED, &wl->flags) ||
-	    WARN_ON((test_bit(CC33XX_FLAG_IN_ELP, &wl->flags) &&
+	if (test_bit(CC33XX_FLAG_IO_FAILED, &cc->flags) ||
+	    WARN_ON((test_bit(CC33XX_FLAG_IN_ELP, &cc->flags) &&
 		     addr != HW_ACCESS_ELP_CTRL_REG)))
 		return -EIO;
 
-	ret = wl->if_ops->write(wl->dev, addr, buf, len, fixed);
-	if (ret && wl->state != WLCORE_STATE_OFF)
-		set_bit(CC33XX_FLAG_IO_FAILED, &wl->flags);
+	ret = cc->if_ops->write(cc->dev, addr, buf, len, fixed);
+	if (ret && cc->state != CC33XX_STATE_OFF)
+		set_bit(CC33XX_FLAG_IO_FAILED, &cc->flags);
 
 	return ret;
 }
 
-int __must_check wlcore_raw_read(struct cc33xx *wl, int addr,
+int __must_check cc33xx_raw_read(struct cc33xx *cc, int addr,
 				 void *buf, size_t len, bool fixed)
 {
 	int ret;
 
-	if (test_bit(CC33XX_FLAG_IO_FAILED, &wl->flags) ||
-	    WARN_ON((test_bit(CC33XX_FLAG_IN_ELP, &wl->flags) &&
+	if (test_bit(CC33XX_FLAG_IO_FAILED, &cc->flags) ||
+	    WARN_ON((test_bit(CC33XX_FLAG_IN_ELP, &cc->flags) &&
 		     addr != HW_ACCESS_ELP_CTRL_REG)))
 		return -EIO;
 
-	ret = wl->if_ops->read(wl->dev, addr, buf, len, fixed);
-	if (ret && wl->state != WLCORE_STATE_OFF)
-		set_bit(CC33XX_FLAG_IO_FAILED, &wl->flags);
+	ret = cc->if_ops->read(cc->dev, addr, buf, len, fixed);
+	if (ret && cc->state != CC33XX_STATE_OFF)
+		set_bit(CC33XX_FLAG_IO_FAILED, &cc->flags);
 
 	return ret;
 }
 
-int __must_check wlcore_write(struct cc33xx *wl, int addr,
+int __must_check cc33xx_write(struct cc33xx *cc, int addr,
 			      void *buf, size_t len, bool fixed)
 {
-	return wlcore_raw_write(wl, addr, buf, len, fixed);
+	return cc33xx_raw_write(cc, addr, buf, len, fixed);
 }
 
-void claim_core_status_lock(struct cc33xx *wl)
+void claim_core_status_lock(struct cc33xx *cc)
 {
 	/* When accessing core-status data (read or write) the transport lock
 	 * should be held. */
-	wl->if_ops->interface_claim(wl->dev);
+	cc->if_ops->interface_claim(cc->dev);
 }
 
-void release_core_status_lock(struct cc33xx *wl)
+void release_core_status_lock(struct cc33xx *cc)
 {
 	/* After accessing core-status data (read or write) the transport lock
 	 * should be released. */
-	wl->if_ops->interface_release(wl->dev);
+	cc->if_ops->interface_release(cc->dev);
 }
 
-void cc33xx_power_off(struct cc33xx *wl)
+void cc33xx_power_off(struct cc33xx *cc)
 {
 	int ret = 0;
 
-	if (!test_bit(CC33XX_FLAG_GPIO_POWER, &wl->flags))
+	if (!test_bit(CC33XX_FLAG_GPIO_POWER, &cc->flags))
 		return;
 
-	if (wl->if_ops->power)
-		ret = wl->if_ops->power(wl->dev, false);
+	if (cc->if_ops->power)
+		ret = cc->if_ops->power(cc->dev, false);
 	if (!ret)
-		clear_bit(CC33XX_FLAG_GPIO_POWER, &wl->flags);
+		clear_bit(CC33XX_FLAG_GPIO_POWER, &cc->flags);
 }
 
-int cc33xx_power_on(struct cc33xx *wl)
+int cc33xx_power_on(struct cc33xx *cc)
 {
 	int ret = 0;
 
-	if (wl->if_ops->power)
-		ret = wl->if_ops->power(wl->dev, true);
+	if (cc->if_ops->power)
+		ret = cc->if_ops->power(cc->dev, true);
 	if (ret == 0)
-		set_bit(CC33XX_FLAG_GPIO_POWER, &wl->flags);
+		set_bit(CC33XX_FLAG_GPIO_POWER, &cc->flags);
 
 	return ret;
 }

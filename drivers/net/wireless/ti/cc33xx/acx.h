@@ -453,43 +453,8 @@ struct cc33xx_acx_ba_receiver_setup {
 	u8 padding[2];
 } __packed;
 
-struct calibration_header_fw {
-
-	/* chip id to assign each chip with its appropriate data */
-	u8 chip_id[ETH_ALEN];
-	/* payload can be of different length, chosen by user*/
-	__le16 length;
-
-} __packed;
-
-struct calibration_header {
-	/* preamble static pattern */
-	__le16 static_pattern;
-
-	struct calibration_header_fw cal_header_fw;
-
-} __packed;
-
-struct calibration_file_header {
-	u8	file_version;
-	u8	payload_struct_version;
-	__le16 entries_count;
-} __packed;
-
-struct cc33xx_acx_static_calibration_cfg {
-
-	struct acx_header header;
-	
-	bool valid_data;
-	u8 file_version;
-	u8 payload_struct_version;
-	u8 padding;
-	struct calibration_header_fw calibration_header;
-	u8  payload[];
-	
-} __packed;
-
 #define ACX_RATE_MGMT_ALL_PARAMS 0xff
+#define ACX_IPV4_ADDR_LENGTH 4
 
 struct acx_default_rx_filter {
 	struct acx_header header;
@@ -502,6 +467,19 @@ struct acx_default_rx_filter {
 	u8 special_packet_bitmask;
 
 	u8 padding;
+} __packed;
+
+struct acx_arp_ip_cfg {
+	struct acx_header header;
+	u8 role_id;
+	u8 address[ACX_IPV4_ADDR_LENGTH];
+	u8 padding[3];
+} __packed;
+
+struct acx_arp_offload {
+	struct acx_header header;
+	u8 enable;
+	u8 padding[3];
 } __packed;
 
 struct acx_rx_filter_cfg {
@@ -541,7 +519,7 @@ typedef enum {
 	DOT11_GROUP_ADDRESS_TBL		= 7,
 	BA_SESSION_RX_SETUP_CFG		= 8,
 	ACX_SLEEP_AUTH			= 9,
-	STATIC_CALIBRATION_CFG		= 10,
+	RESERVED			= 10,
 	AP_RATES_CFG			= 11,
 	WAKE_UP_CONDITIONS_CFG		= 12,
 	SET_ANTENNA_SELECT_CFG		= 13,
@@ -565,6 +543,9 @@ typedef enum {
 	SET_SEED_CFG			= 31,
 	RESET_STATS			= 32,
 	PHY_REGDOMAIN_TX_POWER_PARAMS = 33,
+	CQM_RSSI_CONFIG			= 34,
+	ACX_ARP_IP_CFG			= 35,
+	ACX_ARP_OFFLOAD_ENABLE		= 36,
 
 	LAST_CFG_VALUE			,
 	MAX_DOT11_CFG = LAST_CFG_VALUE	,
@@ -594,6 +575,7 @@ typedef enum {
 	TRIGGER_FW_ASSERT,
 	BURST_MODE_CFG,
 	THERMAL_PROTECTION_CFG,
+	OVERRIDE_TEMPERATURE,
 
 	LAST_DEBUG_VALUE,
 
@@ -618,6 +600,8 @@ typedef enum {
 	GET_STATISTICS = 13,
 	GET_SP_VERSIONS_INTR = 14,
 	GET_LINK_INACTIVITY = 15,
+	// RESERVED = 16,
+	GET_SLOW_CLK_SOURCE = 17,
 	LAST_IE_VALUE,
 	MAX_DOT11_IE = LAST_IE_VALUE,
 
@@ -630,10 +614,12 @@ typedef enum {
  * addition of supported rates
  */
 #define NOMINAL_PACKET_PADDING (0xC0)
-struct wlcore_acx_peer_cap {
+struct cc33xx_acx_peer_cap {
 	struct acx_header header;
 
 	u8 role_id;
+
+	u8 padding_0[3];
 
 	/* rates supported by the remote peer */
 	__le32 supported_rates;
@@ -649,6 +635,16 @@ struct wlcore_acx_peer_cap {
 	/* This is the minimal spacing required when sending A-MPDUs to the AP*/
 	u8 ampdu_min_spacing;
 
+	u8 padding_1[2];
+
+	/* bitmask of capability bits supported by the peer */
+	__le32 	vht_capabilities;
+
+	/* VHT peer support */
+	bool vht_supported;
+
+	u8 padding_2[3];
+
 	/* HE capabilities */
 	u8 mac_cap_info[8];
 
@@ -662,7 +658,6 @@ struct wlcore_acx_peer_cap {
 
 	u8 er_upper_supported;
 
-	u8 paddin[1];
 } __packed;
 
 struct acx_antenna_select {
@@ -785,6 +780,13 @@ struct acx_diversity_status {
 	u8 padding[3];
 } __packed;
 
+struct acx_slow_clk_type {
+	struct acx_header header;
+
+	u8 is_ext_slw_clk;
+	u8 padding[3];
+} __packed;
+
 struct acx_diversity_rssi_threshold {
 	struct acx_header header;
 
@@ -797,6 +799,15 @@ struct acx_diversity_default_antenna {
 
 	u8 default_antenna;
 	u8 padding[3];
+} __packed;
+
+struct acx_cqm_rssi_config {
+	struct acx_header header;
+
+	u8 role_id;
+	u8 enable;
+	s8 threshold_dbm;
+	u8 hysteresis_db;
 } __packed;
 
 struct reset_decrypt_count_cfg {
@@ -843,78 +854,80 @@ struct cc33xx_acx_statistics {
 	struct cc33xx_acx_power_stats power;
 } __packed;
 
-int cc33xx_acx_wake_up_conditions(struct cc33xx *wl,
+int cc33xx_acx_wake_up_conditions(struct cc33xx *cc,
 				  struct cc33xx_vif *wlvif,
 				  u8 wake_up_event, u8 listen_interval);
-int cc33xx_acx_sleep_auth(struct cc33xx *wl, u8 sleep_auth);
-int cc33xx_ble_enable(struct cc33xx *wl, u8 ble_enable);
-int cc33xx_acx_tx_power(struct cc33xx *wl, struct cc33xx_vif *wlvif, int power);
-int cc33xx_acx_slot(struct cc33xx *wl, struct cc33xx_vif *wlvif,
+int cc33xx_acx_sleep_auth(struct cc33xx *cc, u8 sleep_auth);
+int cc33xx_ble_enable(struct cc33xx *cc, u8 ble_enable);
+int cc33xx_acx_tx_power(struct cc33xx *cc, struct cc33xx_vif *wlvif, int power);
+int cc33xx_acx_slot(struct cc33xx *cc, struct cc33xx_vif *wlvif,
 			enum acx_slot_type slot_time);
-int cc33xx_acx_group_address_tbl(struct cc33xx *wl, struct cc33xx_vif *wlvif,
+int cc33xx_acx_group_address_tbl(struct cc33xx *cc,
 				 bool enable, void *mc_list, u32 mc_list_len);
-int cc33xx_acx_beacon_filter_opt(struct cc33xx *wl, struct cc33xx_vif *wlvif,
+int cc33xx_acx_beacon_filter_opt(struct cc33xx *cc, struct cc33xx_vif *wlvif,
 				 bool enable_filter);
-int cc33xx_acx_beacon_filter_table(struct cc33xx *wl, struct cc33xx_vif *wlvif);
-int cc33xx_assoc_info_cfg(struct cc33xx *wl, struct cc33xx_vif *wlvif,
+int cc33xx_acx_beacon_filter_table(struct cc33xx *cc, struct cc33xx_vif *wlvif);
+int cc33xx_assoc_info_cfg(struct cc33xx *cc, struct cc33xx_vif *wlvif,
 			  struct ieee80211_sta *sta,u16 aid);
-int cc33xx_acx_set_preamble(struct cc33xx *wl, struct cc33xx_vif *wlvif,
+int cc33xx_acx_set_preamble(struct cc33xx *cc, struct cc33xx_vif *wlvif,
 				enum acx_preamble_type preamble);
-int cc33xx_acx_cts_protect(struct cc33xx *wl, struct cc33xx_vif *wlvif,
+int cc33xx_acx_cts_protect(struct cc33xx *cc, struct cc33xx_vif *wlvif,
 			   enum acx_ctsprotect_type ctsprotect);
-int cc33xx_tx_param_cfg(struct cc33xx *wl, struct cc33xx_vif *wlvif, u8 ac,
+int cc33xx_tx_param_cfg(struct cc33xx *cc, struct cc33xx_vif *wlvif, u8 ac,
 			u8 cw_min, u16 cw_max, u8 aifsn, u16 txop, bool acm,
 			u8 ps_scheme, u8 is_mu_edca, u8 mu_edca_aifs,
 			u8 mu_edca_ecw_min_max, u8 mu_edca_timer);
-int cc33xx_update_ap_rates(struct cc33xx *wl, u8 role_id, u32 basic_rates_set,
+int cc33xx_update_ap_rates(struct cc33xx *cc, u8 role_id, u32 basic_rates_set,
 			   u32 supported_rates);
-int cc33xx_acx_init_mem_config(struct cc33xx *wl);
-int cc33xx_acx_init_get_fw_versions(struct cc33xx *wl);
-int cc33xx_acx_set_ht_information(struct cc33xx *wl, struct cc33xx_vif *wlvif,
+int cc33xx_acx_init_mem_config(struct cc33xx *cc);
+int cc33xx_acx_init_get_fw_versions(struct cc33xx *cc);
+int cc33xx_acx_set_ht_information(struct cc33xx *cc, struct cc33xx_vif *wlvif,
 				  u16 ht_operation_mode, u32 he_oper_params,
 				  u16 he_oper_nss_set);
-int cc33xx_acx_set_ba_receiver_session(struct cc33xx *wl, u8 tid_index, u16 ssn,
+int cc33xx_acx_set_ba_receiver_session(struct cc33xx *cc, u8 tid_index, u16 ssn,
 					   bool enable, u8 peer_hlid, u8 win_size);
-int cc33xx_acx_static_calibration_configure(struct cc33xx *wl,
-						struct calibration_file_header *file_header,
-						u8 *calibration_entry_ptr,
-						bool valid_data);
-int wlcore_acx_get_tx_rate(struct cc33xx *wl, struct cc33xx_vif *wlvif,
+int cc33xx_acx_get_tx_rate(struct cc33xx *cc, struct cc33xx_vif *wlvif,
 			   struct station_info *sinfo);
-int wlcore_acx_average_rssi(struct cc33xx *wl,
+int cc33xx_acx_average_rssi(struct cc33xx *cc,
 				struct cc33xx_vif *wlvif, s8 *avg_rssi);
-int cc33xx_acx_default_rx_filter_enable(struct cc33xx *wl, bool enable,
+int cc33xx_acx_arp_ip_config(struct cc33xx *cc, u8 role_id, __be32 ip_addr);
+int cc33xx_acx_arp_offload(struct cc33xx *cc, bool enable);
+int cc33xx_acx_default_rx_filter_enable(struct cc33xx *cc, bool enable,
 					enum rx_filter_action action);
-int cc33xx_acx_set_rx_filter(struct cc33xx *wl, u8 index, bool enable,
+int cc33xx_acx_set_rx_filter(struct cc33xx *cc, u8 index, bool enable,
 				 struct cc33xx_rx_filter *filter);
-int cc33xx_acx_set_peer_cap(struct cc33xx *wl,
+int cc33xx_acx_set_peer_cap(struct cc33xx *cc,
 				struct ieee80211_sta_ht_cap *ht_cap,
+				struct ieee80211_sta_vht_cap *vht_cap,
 				struct ieee80211_sta_he_cap *he_cap,
 				struct cc33xx_vif *wlvif, bool allow_ht_operation,
 				u32 rate_set, u8 hlid);
-int cc33xx_acx_set_antenna_select(struct cc33xx *wl, u8 selection);
-int cc33xx_acx_set_tsf(struct cc33xx *wl, u64 tsf_val);
-int cc33xx_acx_trigger_fw_assert(struct cc33xx *wl);
-int cc33xx_acx_burst_mode_cfg(struct cc33xx *wl, u8 burst_disable);
-int cc33xx_acx_get_antenna_diversity_status(struct cc33xx *wl);
-int cc33xx_acx_set_antenna_diversity_status(struct cc33xx *wl, u8 enable);
-int cc33xx_acx_antenna_diversity_get_rssi_threshold(struct cc33xx *wl, s8 *threshold);
-int cc33xx_acx_antenna_diversity_set_rssi_threshold(struct cc33xx *wl, s8 rssi_threshold);
-int cc33xx_acx_antenna_diversity_get_default_antenna(struct cc33xx *wl);
-int cc33xx_acx_antenna_diversity_select_default_antenna(struct cc33xx *wl, u8 default_antenna);
-int cc33xx_acx_twt_setup(struct cc33xx *wl,
+int cc33xx_acx_set_antenna_select(struct cc33xx *cc, u8 selection);
+int cc33xx_acx_set_tsf(struct cc33xx *cc, u64 tsf_val);
+int cc33xx_acx_trigger_fw_assert(struct cc33xx *cc);
+int cc33xx_acx_burst_mode_cfg(struct cc33xx *cc, u8 burst_disable);
+int cc33xx_acx_get_antenna_diversity_status(struct cc33xx *cc);
+int cc33xx_acx_get_slow_clock_type(struct cc33xx *cc);
+int cc33xx_acx_set_antenna_diversity_status(struct cc33xx *cc, u8 enable);
+int cc33xx_acx_antenna_diversity_get_rssi_threshold(struct cc33xx *cc, s8 *threshold);
+int cc33xx_acx_antenna_diversity_set_rssi_threshold(struct cc33xx *cc, s8 rssi_threshold);
+int cc33xx_acx_antenna_diversity_get_default_antenna(struct cc33xx *cc);
+int cc33xx_acx_antenna_diversity_select_default_antenna(struct cc33xx *cc, u8 default_antenna);
+int cc33xx_acx_cqm_rssi_config(struct cc33xx *cc, struct cc33xx_vif *wlvif,
+			       bool enable, s8 threshold, u8 hysteresis);
+int cc33xx_acx_twt_setup(struct cc33xx *cc,
 			 u32 min_wake_duration_usec,
 			 u32 min_wake_interval_mantissa,
 			 u32 min_wake_interval_exponent,
 			 u32 max_wake_interval_mantissa,
 			 u32 max_wake_interval_exponent,
 			 u8 valid_params);
-int cc33xx_acx_twt_terminate(struct cc33xx *wl);
-int cc33xx_acx_twt_resume(struct cc33xx *wl);
-int cc33xx_acx_twt_suspend(struct cc33xx *wl);
-int cc33xx_acx_set_regdoamin_and_tx_control_params(struct cc33xx *wl, struct acx_phy_regdomain_tx_control_params *params);
+int cc33xx_acx_twt_terminate(struct cc33xx *cc);
+int cc33xx_acx_twt_resume(struct cc33xx *cc);
+int cc33xx_acx_twt_suspend(struct cc33xx *cc);
+int cc33xx_acx_set_regdoamin_and_tx_control_params(struct cc33xx *cc, struct acx_phy_regdomain_tx_control_params *params);
 
-int cc33xx_acx_statistics(struct cc33xx *wl, void *stats);
-int cc33xx_acx_clear_statistics(struct cc33xx *wl);
+int cc33xx_acx_statistics(struct cc33xx *cc, void *stats);
+int cc33xx_acx_clear_statistics(struct cc33xx *cc);
 
 #endif /* __CC33XX_ACX_H__ */

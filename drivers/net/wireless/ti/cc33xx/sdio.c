@@ -15,7 +15,7 @@
 #include <linux/pm_runtime.h>
 #include <linux/of_irq.h>
 
-#include "wlcore.h"
+#include "cc33xx.h"
 #include "io.h"
 
 
@@ -98,8 +98,8 @@ static int __must_check cc33xx_sdio_raw_read(struct device *child, int addr,
 		dev_err(child->parent, "sdio read failed (%d)\n", ret);
 
 	if (unlikely(dump)) {
-		printk(KERN_DEBUG "wlcore_sdio: READ from 0x%04x\n", addr);
-		print_hex_dump(KERN_DEBUG, "wlcore_sdio: READ ",
+		printk(KERN_DEBUG "cc33xx_sdio: READ from 0x%04x\n", addr);
+		print_hex_dump(KERN_DEBUG, "cc33xx_sdio: READ ",
 			       DUMP_PREFIX_OFFSET, 16, 1, buf, len, false);
 	}
 
@@ -116,10 +116,10 @@ static int __must_check cc33xx_sdio_raw_write(struct device *child, int addr,
 	sdio_claim_host(func);
 
 	if (unlikely(dump)) {
-		printk(KERN_DEBUG "wlcore_sdio: "
-		       "WRITE to 0x%04x length 0x%x (first 64 Bytes):\n",
-		       addr, (int)len);
-		print_hex_dump(KERN_DEBUG, "wlcore_sdio: WRITE ",
+		printk(KERN_DEBUG "cc33xx_sdio: "
+		       "WRITE to 0x%04x length 0x%zx (first 64 Bytes):\n",
+		       addr, len);
+		print_hex_dump(KERN_DEBUG, "cc33xx_sdio: WRITE ",
 			       DUMP_PREFIX_OFFSET,16, 1, buf,
 			       min(len, (size_t)64), false);
 	}
@@ -206,7 +206,7 @@ static void inband_irq_work(struct work_struct *work)
 {
 	struct cc33xx_sdio_glue *glue = container_of(work, struct cc33xx_sdio_glue, inband_irq_work);
 	struct platform_device *pdev = glue->core;
-	struct wlcore_platdev_data *pdev_data = dev_get_platdata(&pdev->dev);
+	struct cc33xx_platdev_data *pdev_data = dev_get_platdata(&pdev->dev);
 	
 	pdev_data->irq_handler(pdev);
 }
@@ -222,7 +222,7 @@ static void inband_irq_handler(struct sdio_func *func)
 {
 	struct cc33xx_sdio_glue *glue = sdio_get_drvdata(func);
 	struct platform_device *pdev = glue->core;
-	struct wlcore_platdev_data *pdev_data = dev_get_platdata(&pdev->dev);
+	struct cc33xx_platdev_data *pdev_data = dev_get_platdata(&pdev->dev);
 	
 	dev_dbg(glue->dev, "Inband SDIO IRQ");
 
@@ -290,7 +290,7 @@ static void cc33xx_enable_line_irq(struct device *child)
 {
 	struct cc33xx_sdio_glue *glue = dev_get_drvdata(child->parent);
 	struct platform_device *pdev = glue->core;
-	struct wlcore_platdev_data *pdev_data = dev_get_platdata(&pdev->dev);
+	struct cc33xx_platdev_data *pdev_data = dev_get_platdata(&pdev->dev);
 
 	enable_irq(pdev_data->gpio_irq_num);
 }
@@ -299,7 +299,7 @@ static void cc33xx_disable_line_irq(struct device *child)
 {
 	struct cc33xx_sdio_glue *glue = dev_get_drvdata(child->parent);
 	struct platform_device *pdev = glue->core;
-	struct wlcore_platdev_data *pdev_data = dev_get_platdata(&pdev->dev);
+	struct cc33xx_platdev_data *pdev_data = dev_get_platdata(&pdev->dev);
 
 	disable_irq_nosync(pdev_data->gpio_irq_num);
 }
@@ -308,7 +308,7 @@ static void cc33xx_sync_line_irq(struct device *child)
 {
 	struct cc33xx_sdio_glue *glue = dev_get_drvdata(child->parent);
 	struct platform_device *pdev = glue->core;
-	struct wlcore_platdev_data *pdev_data = dev_get_platdata(&pdev->dev);
+	struct cc33xx_platdev_data *pdev_data = dev_get_platdata(&pdev->dev);
 
 	synchronize_irq(pdev_data->gpio_irq_num);
 }
@@ -317,7 +317,7 @@ static void cc33xx_set_irq_handler(struct device *child, void* handler)
 {
 	struct cc33xx_sdio_glue *glue = dev_get_drvdata(child->parent);
 	struct platform_device *pdev = glue->core;
-	struct wlcore_platdev_data *pdev_data = dev_get_platdata(&pdev->dev);
+	struct cc33xx_platdev_data *pdev_data = dev_get_platdata(&pdev->dev);
 
 	pdev_data->irq_handler = handler;
 }
@@ -355,18 +355,18 @@ static const struct cc33xx_family_data cc33xx_data = {
 	.nvs_name = "ti-connectivity/cc33xx-nvs.bin",
 };
 
-static const struct of_device_id wlcore_sdio_of_match_table[] = {
+static const struct of_device_id cc33xx_sdio_of_match_table[] = {
 	{ .compatible = "ti,cc33xx", .data = &cc33xx_data },
 	{ }
 };
 
-static int wlcore_probe_of(struct device *dev, int *irq, int *wakeirq,
-			   struct wlcore_platdev_data *pdev_data)
+static int cc33xx_probe_of(struct device *dev, int *irq, int *wakeirq,
+			   struct cc33xx_platdev_data *pdev_data)
 {
 	struct device_node *np = dev->of_node;
 	const struct of_device_id *of_id;
 
-	of_id = of_match_node(wlcore_sdio_of_match_table, np);
+	of_id = of_match_node(cc33xx_sdio_of_match_table, np);
 	if (!of_id)
 		return -ENODEV;
 
@@ -381,8 +381,8 @@ static int wlcore_probe_of(struct device *dev, int *irq, int *wakeirq,
 	return 0;
 }
 #else
-static int wlcore_probe_of(struct device *dev, int *irq, int *wakeirq,
-			   struct wlcore_platdev_data *pdev_data)
+static int cc33xx_probe_of(struct device *dev, int *irq, int *wakeirq,
+			   struct cc33xx_platdev_data *pdev_data)
 {
 	return -ENODATA;
 }
@@ -398,7 +398,7 @@ static irqreturn_t gpio_irq_thread_handler(int irq, void *cookie)
 	struct sdio_func *func = cookie;
 	struct cc33xx_sdio_glue *glue = sdio_get_drvdata(func);
 	struct platform_device *pdev = glue->core;
-	struct wlcore_platdev_data *pdev_data = dev_get_platdata(&pdev->dev);
+	struct cc33xx_platdev_data *pdev_data = dev_get_platdata(&pdev->dev);
 
 	BUG_ON(!pdev_data->irq_handler);
 
@@ -410,7 +410,7 @@ static irqreturn_t gpio_irq_thread_handler(int irq, void *cookie)
 static int sdio_cc33xx_probe(struct sdio_func *func,
 				  const struct sdio_device_id *id)
 {
-	struct wlcore_platdev_data *pdev_data;
+	struct cc33xx_platdev_data *pdev_data;
 	struct cc33xx_sdio_glue *glue;
 	struct resource res[1];
 	mmc_pm_flag_t mmcflags;
@@ -438,7 +438,7 @@ static int sdio_cc33xx_probe(struct sdio_func *func,
 	/* Use block mode for transferring over one block size of data */
 	func->card->quirks |= MMC_QUIRK_BLKSZ_FOR_BYTE_MODE;
 
-	ret = wlcore_probe_of(&func->dev, &gpio_irq, &wakeirq, pdev_data);
+	ret = cc33xx_probe_of(&func->dev, &gpio_irq, &wakeirq, pdev_data);
 	if (ret)
 		goto out;
 
@@ -537,7 +537,7 @@ static void sdio_cc33xx_remove(struct sdio_func *func)
 {
 	struct cc33xx_sdio_glue *glue = sdio_get_drvdata(func);
 	struct platform_device *pdev = glue->core;
-	struct wlcore_platdev_data *pdev_data = dev_get_platdata(&pdev->dev);
+	struct cc33xx_platdev_data *pdev_data = dev_get_platdata(&pdev->dev);
 
 	/* Undo decrement done above in sdio_cc33xx_probe */
 	pm_runtime_get_noresume(&func->dev);
@@ -563,19 +563,19 @@ static int cc33xx_suspend(struct device *dev)
 	 * (if it isn't already), but not to remove it completely */
 	struct sdio_func *func = dev_to_sdio_func(dev);
 	struct cc33xx_sdio_glue *glue = sdio_get_drvdata(func);
-	struct cc33xx *wl = platform_get_drvdata(glue->core);
+	struct cc33xx *cc = platform_get_drvdata(glue->core);
 	mmc_pm_flag_t sdio_flags;
 	int ret = 0;
 
-	if (!wl) {
+	if (!cc) {
 		dev_err(dev, "no wilink module was probed\n");
 		goto out;
 	}
 
 	dev_dbg(dev, "cc33xx suspend. keep_device_power: %d\n",
-		wl->keep_device_power);
+		cc->keep_device_power);
 
-	if (wl->keep_device_power) {
+	if (cc->keep_device_power) {
 		sdio_flags = sdio_get_host_pm_caps(func);
 
 		if (!(sdio_flags & MMC_PM_KEEP_POWER)) {

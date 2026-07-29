@@ -14,7 +14,7 @@
  */
 
 #include "vendor_sona.h"
-#include "wlcore.h"
+#include "cc33xx.h"
 
 const struct nla_policy radio_id_policy[ATTR_RID_MAX + 1] = {
     [ATTR_RID_FAMILY]   = {.type = NLA_U32},
@@ -28,12 +28,12 @@ sona_vendor_cmd_radio_id(struct wiphy *wiphy, struct wireless_dev *wdev,
 			       const void *data, int data_len)
 {
 	struct ieee80211_hw  *hw = wiphy_to_ieee80211_hw(wiphy);
-	struct cc33xx *wl = hw->priv;
+	struct cc33xx *cc = hw->priv;
 
 	struct sk_buff            *skb = NULL;
 	int                        ret = 0;
 
-	if (!((wl->disable_5g == false) && (wl->disable_6g == true))) {
+	if (!((cc->disable_5g == false) && (cc->disable_6g == true))) {
 		wiphy_err(wiphy, "Unsupported chipset\n");
 		ret = -EOPNOTSUPP;
 		goto done;

@@ -11,7 +11,7 @@
 #ifndef __CMD_H__
 #define __CMD_H__
 
-#include "wlcore.h"
+#include "cc33xx.h"
 
 
 struct acx_header;
@@ -21,70 +21,68 @@ typedef enum {
 	CMD_MAX_BUFFER_SIZE
 } BufferSize_e;
 
-int cc33xx_set_max_buffer_size(struct cc33xx *wl, BufferSize_e max_buffer_size);
-int cc33xx_cmd_send(struct cc33xx *wl, u16 id, void *buf,
+int cc33xx_cmd_send(struct cc33xx *cc, u16 id, void *buf,
 		    size_t len, size_t res_len);
-int cc33xx_cmd_role_enable(struct cc33xx *wl, u8 *addr,
+int cc33xx_cmd_role_enable(struct cc33xx *cc, u8 *addr,
 			   u8 role_type, u8 *role_id);
-int cc33xx_cmd_role_disable(struct cc33xx *wl, u8 *role_id);
-int cc33xx_cmd_role_start_sta(struct cc33xx *wl, struct cc33xx_vif *wlvif);
-int cc33xx_cmd_role_stop_sta(struct cc33xx *wl, struct cc33xx_vif *wlvif);
-int cc33xx_cmd_role_start_ap(struct cc33xx *wl, struct cc33xx_vif *wlvif);
-int cc33xx_cmd_role_stop_ap(struct cc33xx *wl, struct cc33xx_vif *wlvif);
-int cc33xx_cmd_role_start_ibss(struct cc33xx *wl, struct cc33xx_vif *wlvif);
-int cc33xx_start_dev(struct cc33xx *wl, struct cc33xx_vif *wlvif,
+int cc33xx_cmd_role_disable(struct cc33xx *cc, u8 *role_id);
+int cc33xx_cmd_role_start_sta(struct cc33xx *cc, struct cc33xx_vif *wlvif);
+int cc33xx_cmd_role_stop_sta(struct cc33xx *cc, struct cc33xx_vif *wlvif);
+int cc33xx_cmd_role_start_ap(struct cc33xx *cc, struct cc33xx_vif *wlvif);
+int cc33xx_cmd_role_stop_ap(struct cc33xx *cc, struct cc33xx_vif *wlvif);
+int cc33xx_cmd_role_start_ibss(struct cc33xx *cc, struct cc33xx_vif *wlvif);
+int cc33xx_start_dev(struct cc33xx *cc, struct cc33xx_vif *wlvif,
 		     enum nl80211_band band, int channel);
-int cc33xx_stop_dev(struct cc33xx *wl, struct cc33xx_vif *wlvif);
-int cc33xx_cmd_test(struct cc33xx *wl, void *buf, size_t buf_len, u8 answer);
-int cc33xx_cmd_interrogate(struct cc33xx *wl, u16 id, void *buf,
+int cc33xx_stop_dev(struct cc33xx *cc, struct cc33xx_vif *wlvif);
+int cc33xx_cmd_test(struct cc33xx *cc, void *buf, size_t buf_len, u8 answer);
+int cc33xx_cmd_interrogate(struct cc33xx *cc, u16 id, void *buf,
 			   size_t cmd_len, size_t res_len);
-int cc33xx_cmd_debug_inter(struct cc33xx *wl, u16 id, void *buf,
+int cc33xx_cmd_debug_inter(struct cc33xx *cc, u16 id, void *buf,
 			   size_t cmd_len, size_t res_len);
-int cc33xx_cmd_configure(struct cc33xx *wl, u16 id, void *buf, size_t len);
-int cc33xx_cmd_debug(struct cc33xx *wl, u16 id, void *buf, size_t len);
-int wlcore_cmd_configure_failsafe(struct cc33xx *wl, u16 id, void *buf,
+int cc33xx_cmd_configure(struct cc33xx *cc, u16 id, void *buf, size_t len);
+int cc33xx_cmd_debug(struct cc33xx *cc, u16 id, void *buf, size_t len);
+int cc33xx_cmd_configure_failsafe(struct cc33xx *cc, u16 id, void *buf,
 				  size_t len, unsigned long valid_rets);
-int cc33xx_cmd_ps_mode(struct cc33xx *wl, struct cc33xx_vif *wlvif,
+int cc33xx_cmd_ps_mode(struct cc33xx *cc, struct cc33xx_vif *wlvif,
 		       u8 ps_mode, u16 auto_ps_timeout);
-int cc33xx_cmd_set_default_wep_key(struct cc33xx *wl, u8 id, u8 hlid);
-int cc33xx_cmd_set_sta_key(struct cc33xx *wl, struct cc33xx_vif *wlvif,
+int cc33xx_cmd_set_default_wep_key(struct cc33xx *cc, u8 id, u8 hlid);
+int cc33xx_cmd_set_sta_key(struct cc33xx *cc, struct cc33xx_vif *wlvif,
 			   u16 action, u8 id, u8 key_type,
 			   u8 key_size, const u8 *key, const u8 *addr,
 			   u32 tx_seq_32, u16 tx_seq_16);
-int cc33xx_cmd_set_ap_key(struct cc33xx *wl, struct cc33xx_vif *wlvif,
+int cc33xx_cmd_set_ap_key(struct cc33xx *cc, struct cc33xx_vif *wlvif,
 			  u16 action, u8 id, u8 key_type, u8 key_size,
 			  const u8 *key, u8 hlid, u32 tx_seq_32, u16 tx_seq_16);
-int cc33xx_cmd_set_peer_state(struct cc33xx *wl,
+int cc33xx_cmd_set_peer_state(struct cc33xx *cc,
 			      struct cc33xx_vif *wlvif, u8 hlid);
-int cc33xx_roc(struct cc33xx *wl, struct cc33xx_vif *wlvif, u8 role_id,
+int cc33xx_roc(struct cc33xx *cc, struct cc33xx_vif *wlvif, u8 role_id,
 	       enum nl80211_band band, u8 channel);
-int cc33xx_croc(struct cc33xx *wl, u8 role_id);
-int cc33xx_cmd_add_peer(struct cc33xx *wl, struct cc33xx_vif *wlvif,
+int cc33xx_croc(struct cc33xx *cc, u8 role_id);
+int cc33xx_cmd_add_peer(struct cc33xx *cc, struct cc33xx_vif *wlvif,
 			struct ieee80211_sta *sta, u8 *hlid, u8 is_connected);
-int cc33xx_cmd_remove_peer(struct cc33xx *wl,
+int cc33xx_cmd_remove_peer(struct cc33xx *cc,
 			   struct cc33xx_vif *wlvif, u8 hlid);
-void wlcore_set_pending_regdomain_ch(struct cc33xx *wl, u16 channel,
+void cc33xx_set_pending_regdomain_ch(struct cc33xx *cc, u16 channel,
 				     enum nl80211_band band);
-int wlcore_cmd_regdomain_config_locked(struct cc33xx *wl);
-int wlcore_cmd_generic_cfg(struct cc33xx *wl, struct cc33xx_vif *wlvif,
+int cc33xx_cmd_regdomain_config_locked(struct cc33xx *cc);
+int cc33xx_cmd_generic_cfg(struct cc33xx *cc, struct cc33xx_vif *wlvif,
 			   u8 feature, u8 enable, u8 value);
-int cc33xx_cmd_config_fwlog(struct cc33xx *wl);
-int cc33xx_cmd_stop_channel_switch(struct cc33xx *wl, struct cc33xx_vif *wlvif);
-int cc33xx_set_link(struct cc33xx *wl, struct cc33xx_vif *wlvif, u8 link);
-void cc33xx_clear_link(struct cc33xx *wl, struct cc33xx_vif *wlvif, u8 *hlid);
-int cc33xx_cmd_role_start_transceiver(struct cc33xx *wl, u8 role_id);
-int cc33xx_cmd_role_stop_transceiver(struct cc33xx *wl);
-int cc33xx_cmd_plt_enable(struct cc33xx *wl, u8 role_id);
-int cc33xx_cmd_plt_disable(struct cc33xx *wl);
-int cmd_channel_switch(struct cc33xx *wl, struct cc33xx_vif *wlvif,
+int cc33xx_cmd_config_fwlog(struct cc33xx *cc);
+int cc33xx_cmd_stop_channel_switch(struct cc33xx *cc, struct cc33xx_vif *wlvif);
+int cc33xx_set_link(struct cc33xx *cc, struct cc33xx_vif *wlvif, u8 link);
+void cc33xx_clear_link(struct cc33xx *cc, struct cc33xx_vif *wlvif, u8 *hlid);
+int cc33xx_cmd_role_start_transceiver(struct cc33xx *cc, u8 role_id);
+int cc33xx_cmd_role_stop_transceiver(struct cc33xx *cc);
+int cc33xx_cmd_plt_enable(struct cc33xx *cc, u8 role_id);
+int cc33xx_cmd_plt_disable(struct cc33xx *cc);
+int cmd_channel_switch(struct cc33xx *cc, struct cc33xx_vif *wlvif,
 		       struct ieee80211_channel_switch *ch_switch);
-int cmd_dfs_master_restart(struct cc33xx *wl, struct cc33xx_vif *wlvif);
-int cmd_set_cac(struct cc33xx *wl, struct cc33xx_vif *wlvif, bool start);
-int cmd_set_bd_addr(struct cc33xx *wl, u8 *bd_addr);
-int cmd_get_device_info(struct cc33xx *wl, u8 *info_buffer, size_t buffer_len);
-int cmd_download_container_chunk(struct cc33xx *wl, u8 *chunk,
+int cmd_dfs_master_restart(struct cc33xx *cc, struct cc33xx_vif *wlvif);
+int cmd_set_cac(struct cc33xx *cc, struct cc33xx_vif *wlvif, bool start);
+int cmd_set_bd_addr(struct cc33xx *cc, u8 *bd_addr);
+int cmd_get_device_info(struct cc33xx *cc, u8 *info_buffer, size_t buffer_len);
+int cmd_download_container_chunk(struct cc33xx *cc, u8 *chunk,
 				 size_t chunk_len, bool is_last_chunk);
-int cc33xx_cmd_cqm_rssi_config(struct cc33xx *wl, struct cc33xx_vif *wlvif, bool enable, s8 threshold, u8 hysteresis);
 
 
 enum cc33xx_cmd {
@@ -146,10 +144,6 @@ enum cc33xx_cmd {
 	CMD_SET_BD_ADDR = 38,
   	CMD_BLE_COMMANDS = 39,
 	CMD_SET_PS_MODE = 40,
-	// RESERVED = 41,
-	// RESERVED = 42,
-	// RESERVED = 43,
-	CMD_CQM_RSSI_CONFIG = 44,
 
 	CMD_LAST_SUPPORTED_COMMAND,
 
@@ -282,21 +276,21 @@ struct cc33xx_cmd_role_disable {
 	u8 padding[3];
 } __packed;
 
-enum wlcore_band {
-	WLCORE_BAND_2_4GHZ		= 0,
-	WLCORE_BAND_5GHZ		= 1,
-	WLCORE_BAND_6GHZ		= 2,
-	WLCORE_BAND_JAPAN_4_9_GHZ	= 3,
-	WLCORE_BAND_DEFAULT		= WLCORE_BAND_2_4GHZ,
-	WLCORE_BAND_INVALID		= 0x7E,
-	WLCORE_BAND_MAX_RADIO		= 0x7F,
+enum cc33xx_band {
+	CC33XX_BAND_2_4GHZ		= 0,
+	CC33XX_BAND_5GHZ		= 1,
+	CC33XX_BAND_6GHZ		= 2,
+	CC33XX_BAND_JAPAN_4_9_GHZ	= 3,
+	CC33XX_BAND_DEFAULT		= CC33XX_BAND_2_4GHZ,
+	CC33XX_BAND_INVALID		= 0x7E,
+	CC33XX_BAND_MAX_RADIO		= 0x7F,
 };
 
-enum wlcore_channel_type {
-	WLCORE_CHAN_NO_HT,
-	WLCORE_CHAN_HT20,
-	WLCORE_CHAN_HT40MINUS,
-	WLCORE_CHAN_HT40PLUS
+enum cc33xx_channel_type {
+	CC33XX_CHAN_NO_HT,
+	CC33XX_CHAN_HT20,
+	CC33XX_CHAN_HT40MINUS,
+	CC33XX_CHAN_HT40PLUS
 };
 
 struct cc33xx_cmd_role_start {
@@ -307,7 +301,7 @@ struct cc33xx_cmd_role_start {
 	u8 channel;
 	u8 is_dfs_channel;
 
-	/* enum wlcore_channel_type */
+	/* enum cc33xx_channel_type */
 	u8 channel_type;
 
 	union {
@@ -564,6 +558,10 @@ struct cc33xx_cmd_add_peer {
 	__le32 ht_capabilities;
 	u8  ampdu_params;
 
+	// /* VHT peer support */
+	// __le32 	vht_capabilities;
+	// u8 vht_supported;
+	
 	/* HE peer support */
 	bool has_he;
 	bool mfp;
@@ -618,11 +616,11 @@ struct cc33xx_cmd_regdomain_dfs_config {
 	u8 padding[3];
 } __packed;
 
-enum wlcore_generic_cfg_feature {
-	WLCORE_CFG_FEATURE_RADAR_DEBUG = 2,
+enum cc33xx_generic_cfg_feature {
+	CC33XX_CFG_FEATURE_RADAR_DEBUG = 2,
 };
 
-struct wlcore_cmd_generic_cfg {
+struct cc33xx_cmd_generic_cfg {
 	struct cc33xx_cmd_header header;
 
 	u8 role_id;
@@ -757,15 +755,6 @@ struct cc33xx_cmd_container_download {
 struct cc33xx_cmd_get_device_info {
 	struct cc33xx_cmd_header header;
 	u8 device_info[700];
-} __packed;
-
-struct cc33xx_cmd_cqm_rssi_config {
-    struct cc33xx_cmd_header header;
-
-    u8 role_id;
-    u8 enable;
-    s8 threshold_dbm;
-	u8 hysteresis_db;
 } __packed;
 
 

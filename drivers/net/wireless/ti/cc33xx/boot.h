@@ -10,12 +10,12 @@
 #ifndef __BOOT_H__
 #define __BOOT_H__
 
-#include "wlcore.h"
+#include "cc33xx.h"
 
 
-int cc33xx_init_fw(struct cc33xx *wl);
+int cc33xx_init_fw(struct cc33xx *cc);
 
-void cc33xx_handle_boot_irqs(struct cc33xx *wl, u32 pending_interrupts);
+void cc33xx_handle_boot_irqs(struct cc33xx *cc, u32 pending_interrupts);
 
 #define SECOND_LOADER_NAME "ti-connectivity/cc33xx_2nd_loader.bin"
 #define FW_NAME "ti-connectivity/cc33xx_fw.bin"

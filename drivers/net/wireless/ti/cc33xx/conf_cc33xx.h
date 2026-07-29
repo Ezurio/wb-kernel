@@ -873,6 +873,7 @@ struct cc33xx_mac_conf {
 	uint8_t  ps_mode;
 	uint8_t  ps_scheme;
 	uint8_t  he_enable;
+	uint8_t  vht_enable;
 	uint8_t  ApMaxNumStations;
 	uint8_t  fw_defrag;
 	uint16_t rx_memblks_override;

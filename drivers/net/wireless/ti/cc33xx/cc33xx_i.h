@@ -8,8 +8,8 @@
  * Contact: Luciano Coelho <luciano.coelho@nokia.com>
  */
 
-#ifndef __WLCORE_I_H__
-#define __WLCORE_I_H__
+#ifndef __CC33XX_I_H__
+#define __CC33XX_I_H__
 
 #include <net/mac80211.h>
 #include <linux/platform_device.h>
@@ -42,7 +42,7 @@ struct cc33xx_family_data {
 #define CC33XX_MAX_LINKS 21
 
 /* the driver supports the 2.4Ghz and 5Ghz bands */
-#define WLCORE_NUM_BANDS           2
+#define CC33XX_NUM_BANDS           2
 
 #define CC33XX_MAX_RATE_POLICIES 16
 
@@ -61,11 +61,11 @@ struct cc33xx_family_data {
 
 #define CC33XX_AP_BSS_INDEX        0
 
-enum wlcore_state {
-	WLCORE_STATE_OFF,
-	WLCORE_STATE_RESTARTING,
-	WLCORE_STATE_ON,
-	WLCORE_STATE_FAILED,
+enum cc33xx_state {
+	CC33XX_STATE_OFF,
+	CC33XX_STATE_RESTARTING,
+	CC33XX_STATE_ON,
+	CC33XX_STATE_FAILED,
 };
 
 struct cc33xx;
@@ -100,7 +100,7 @@ struct cc33xx_if_operations {
 	void (*sync_irq) (struct device *child);
 };
 
-struct wlcore_platdev_data {
+struct cc33xx_platdev_data {
 	struct cc33xx_if_operations *if_ops;
 	const struct cc33xx_family_data *family;
 	void (*irq_handler)(struct platform_device *pdev);
@@ -187,11 +187,11 @@ struct cc33xx_link {
 	u64 total_freed_pkts;
 };
 
-#define CC33XX_MAX_RX_FILTERS 5
-#define CC33XX_RX_FILTER_MAX_FIELDS 8
+#define CC33XX_MAX_RX_FILTERS 7
+#define CC33XX_RX_FILTER_MAX_FIELDS 7
 
 #define CC33XX_RX_FILTER_ETH_HEADER_SIZE 14
-#define CC33XX_RX_FILTER_MAX_FIELDS_SIZE 95
+#define CC33XX_RX_FILTER_MAX_FIELDS_SIZE 98
 #define RX_FILTER_FIELD_OVERHEAD				\
 	(sizeof(struct cc33xx_rx_filter_field) - sizeof(u8 *))
 #define CC33XX_RX_FILTER_MAX_PATTERN_SIZE			\
@@ -242,7 +242,7 @@ struct cc33xx_station {
 };
 
 struct cc33xx_vif {
-	struct cc33xx *wl;
+	struct cc33xx *cc;
 	struct list_head list;
 	unsigned long flags;
 	u8 bss_type;
@@ -298,7 +298,7 @@ struct cc33xx_vif {
 	int channel;
 	enum nl80211_channel_type channel_type;
 
-	u32 bitrate_masks[WLCORE_NUM_BANDS];
+	u32 bitrate_masks[CC33XX_NUM_BANDS];
 	u32 basic_rate_set;
 
 	/*
@@ -410,7 +410,7 @@ struct cc33xx_vif {
 	};
 };
 
-void wlcore_irq(void *cookie);
+void cc33xx_irq(void *cookie);
 
 static inline struct cc33xx_vif *cc33xx_vif_to_data(struct ieee80211_vif *vif)
 {
@@ -424,26 +424,26 @@ struct ieee80211_vif *cc33xx_wlvif_to_vif(struct cc33xx_vif *wlvif)
 	return container_of((void *)wlvif, struct ieee80211_vif, drv_priv);
 }
 
-static inline bool wlcore_is_p2p_mgmt(struct cc33xx_vif *wlvif)
+static inline bool cc33xx_is_p2p_mgmt(struct cc33xx_vif *wlvif)
 {
 	return cc33xx_wlvif_to_vif(wlvif)->type == NL80211_IFTYPE_P2P_DEVICE;
 }
 
-#define cc33xx_for_each_wlvif(wl, wlvif) \
-		list_for_each_entry(wlvif, &wl->wlvif_list, list)
+#define cc33xx_for_each_wlvif(cc, wlvif) \
+		list_for_each_entry(wlvif, &cc->wlvif_list, list)
 
-#define cc33xx_for_each_wlvif_continue(wl, wlvif) \
-		list_for_each_entry_continue(wlvif, &wl->wlvif_list, list)
+#define cc33xx_for_each_wlvif_continue(cc, wlvif) \
+		list_for_each_entry_continue(wlvif, &cc->wlvif_list, list)
 
-#define cc33xx_for_each_wlvif_bss_type(wl, wlvif, _bss_type)	\
-		cc33xx_for_each_wlvif(wl, wlvif)		\
+#define cc33xx_for_each_wlvif_bss_type(cc, wlvif, _bss_type)	\
+		cc33xx_for_each_wlvif(cc, wlvif)		\
 			if (wlvif->bss_type == _bss_type)
 
-#define cc33xx_for_each_wlvif_sta(wl, wlvif)	\
-		cc33xx_for_each_wlvif_bss_type(wl, wlvif, BSS_TYPE_STA_BSS)
+#define cc33xx_for_each_wlvif_sta(cc, wlvif)	\
+		cc33xx_for_each_wlvif_bss_type(cc, wlvif, BSS_TYPE_STA_BSS)
 
-#define cc33xx_for_each_wlvif_ap(wl, wlvif)	\
-		cc33xx_for_each_wlvif_bss_type(wl, wlvif, BSS_TYPE_AP_BSS)
+#define cc33xx_for_each_wlvif_ap(cc, wlvif)	\
+		cc33xx_for_each_wlvif_bss_type(cc, wlvif, BSS_TYPE_AP_BSS)
 
 #define SESSION_COUNTER_INVALID 7 /* used with dummy_packet */
 
@@ -465,4 +465,4 @@ static inline bool wlcore_is_p2p_mgmt(struct cc33xx_vif *wlvif)
 #define HW_MIMO_RATES_OFFSET	24
 
 
-#endif /* __WLCORE_I_H__ */
+#endif /* __CC33XX_I_H__ */

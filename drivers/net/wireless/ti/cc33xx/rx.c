@@ -19,7 +19,7 @@
 
 
 /* Construct the rx status structure for upper layers */
-static void cc33xx_rx_status(struct cc33xx *wl,
+static void cc33xx_rx_status(struct cc33xx *cc,
 			     struct cc33xx_rx_descriptor *desc,
 			     struct ieee80211_rx_status *status,
 			     u8 beacon, u8 probe_rsp)
@@ -35,7 +35,7 @@ static void cc33xx_rx_status(struct cc33xx *wl,
 	else
 		status->band = NL80211_BAND_5GHZ; /* todo -Should be 6GHZ when added */
 	
-	status->rate_idx = wlcore_rate_to_idx(wl, desc->rate, status->band);
+	status->rate_idx = cc33xx_rate_to_idx(cc, desc->rate, status->band);
 
 	if (desc->frame_format == CC33xx_VHT)
 		status->encoding = RX_ENC_VHT;
@@ -64,7 +64,7 @@ static void cc33xx_rx_status(struct cc33xx *wl,
 	 * changing it.  This needs to be rechecked.
 	 */
 	 /*  is snr available? used?*/
-	/*wl->noise = desc->rssi - (desc->snr >> 1);*/
+	/*cc->noise = desc->rssi - (desc->snr >> 1);*/
 
 	status->freq = ieee80211_channel_to_frequency(desc->channel,
 						      status->band);
@@ -92,13 +92,13 @@ static void cc33xx_rx_status(struct cc33xx *wl,
 		status->boottime_ns = ktime_get_boottime_ns();
 
 	if (beacon)
-		wlcore_set_pending_regdomain_ch(wl, (u16)desc->channel,
+		cc33xx_set_pending_regdomain_ch(cc, (u16)desc->channel,
 						status->band);
 	status->nss = 1;
 }
 
 /* Copy part\ all of the descriptor. Allocate skb, or drop corrupted packet */
-static int wlcore_rx_getPacketDescriptor(struct cc33xx *wl, u8 *raw_buffer_ptr,
+static int cc33xx_rx_getPacketDescriptor(struct cc33xx *cc, u8 *raw_buffer_ptr,
 					 u16 *raw_buffer_len)
 {
 	u16 missing_desc_bytes;
@@ -108,39 +108,39 @@ static int wlcore_rx_getPacketDescriptor(struct cc33xx *wl, u8 *raw_buffer_ptr,
 	u16 prev_buffer_len = *raw_buffer_len;
 
 	missing_desc_bytes = sizeof(struct cc33xx_rx_descriptor);
-	missing_desc_bytes -= wl->partial_rx.handled_bytes;
+	missing_desc_bytes -= cc->partial_rx.handled_bytes;
 	available_desc_bytes = min(*raw_buffer_len, missing_desc_bytes);
-	memcpy(((u8 *)(&wl->partial_rx.desc))+wl->partial_rx.handled_bytes,
+	memcpy(((u8 *)(&cc->partial_rx.desc))+cc->partial_rx.handled_bytes,
 		raw_buffer_ptr,available_desc_bytes);
 
 	/* If descriptor was not completed */
 	if (available_desc_bytes != missing_desc_bytes) {
-		wl->partial_rx.handled_bytes += *raw_buffer_len;
-		wl->partial_rx.status = CURR_RX_DESC;
+		cc->partial_rx.handled_bytes += *raw_buffer_len;
+		cc->partial_rx.status = CURR_RX_DESC;
 		*raw_buffer_len = 0;
 		goto out;
 	} else {
-		wl->partial_rx.handled_bytes += available_desc_bytes;
+		cc->partial_rx.handled_bytes += available_desc_bytes;
 		*raw_buffer_len -= available_desc_bytes;
 	}
 
 	/* Descriptor was fully copied */
-	pkt_data_len = wl->partial_rx.original_bytes;
+	pkt_data_len = cc->partial_rx.original_bytes;
 	pkt_data_len -=	sizeof(struct cc33xx_rx_descriptor);
 
-	if (unlikely(wl->partial_rx.desc.status & CC33XX_RX_DESC_DECRYPT_FAIL)){
+	if (unlikely(cc->partial_rx.desc.status & CC33XX_RX_DESC_DECRYPT_FAIL)){
 		cc33xx_warning("corrupted packet in RX: status: 0x%x len: %d",
-			wl->partial_rx.desc.status & CC33XX_RX_DESC_STATUS_MASK,
+			cc->partial_rx.desc.status & CC33XX_RX_DESC_STATUS_MASK,
 			pkt_data_len);
 
 		/* If frame can be fully dropped */
 		if (pkt_data_len <= *raw_buffer_len) {
 			*raw_buffer_len -=  pkt_data_len;
-			wl->partial_rx.status = CURR_RX_START;
+			cc->partial_rx.status = CURR_RX_START;
 		}
 		else {
-			wl->partial_rx.handled_bytes += *raw_buffer_len;
-			wl->partial_rx.status = CURR_RX_DROP;
+			cc->partial_rx.handled_bytes += *raw_buffer_len;
+			cc->partial_rx.status = CURR_RX_DROP;
 			*raw_buffer_len = 0;
 		}
 		goto out;
@@ -152,18 +152,18 @@ static int wlcore_rx_getPacketDescriptor(struct cc33xx *wl, u8 *raw_buffer_ptr,
 		/* If frame can be fully dropped */
 		if (pkt_data_len <= *raw_buffer_len) {
 			*raw_buffer_len -=  pkt_data_len;
-			wl->partial_rx.status = CURR_RX_START;
+			cc->partial_rx.status = CURR_RX_START;
 		} else {
 		/* Dropped partial frame */
-			wl->partial_rx.handled_bytes += *raw_buffer_len;
-			wl->partial_rx.status = CURR_RX_DROP;
+			cc->partial_rx.handled_bytes += *raw_buffer_len;
+			cc->partial_rx.status = CURR_RX_DROP;
 			*raw_buffer_len = 0;
 		}
 		goto out;
 	}
 
-	wl->partial_rx.skb = skb;
-	wl->partial_rx.status = CURR_RX_DATA;
+	cc->partial_rx.skb = skb;
+	cc->partial_rx.status = CURR_RX_DATA;
 
 out:
 	/* Function return the amount of consumed bytes */
@@ -171,7 +171,7 @@ out:
 }
 
 /* Copy part or all of the packet's data. push skb to queue if possible */
-static int wlcore_rx_getPacketData(struct cc33xx *wl, u8 *raw_buffer_ptr,
+static int cc33xx_rx_getPacketData(struct cc33xx *cc, u8 *raw_buffer_ptr,
 				   u16 *raw_buffer_len)
 {
 	u16 missing_data_bytes;
@@ -186,24 +186,24 @@ static int wlcore_rx_getPacketData(struct cc33xx *wl, u8 *raw_buffer_ptr,
 	u16 seq_num;
 	u16 prev_buffer_len = *raw_buffer_len;
 
-	missing_data_bytes = wl->partial_rx.original_bytes;
-	missing_data_bytes -= wl->partial_rx.handled_bytes;
+	missing_data_bytes = cc->partial_rx.original_bytes;
+	missing_data_bytes -= cc->partial_rx.handled_bytes;
 
 	cc33xx_debug(DEBUG_RX, "current rx data: original bytes: %d, "
 		     "handled bytes %d, desc pad len %d, missing_data_bytes %d",
-		     wl->partial_rx.original_bytes,
-		     wl->partial_rx.handled_bytes,
-		     wl->partial_rx.desc.pad_len,missing_data_bytes);
+		     cc->partial_rx.original_bytes,
+		     cc->partial_rx.handled_bytes,
+		     cc->partial_rx.desc.pad_len,missing_data_bytes);
 
 	available_data_bytes = min(missing_data_bytes,*raw_buffer_len);
 
-	skb_put_data(wl->partial_rx.skb, raw_buffer_ptr, available_data_bytes);
+	skb_put_data(cc->partial_rx.skb, raw_buffer_ptr, available_data_bytes);
 
 	/* Check if we didn't manage to copy the entire packet - got out,
 	* continue next time */
 	if (available_data_bytes != missing_data_bytes) {
-		wl->partial_rx.handled_bytes += *raw_buffer_len;
-		wl->partial_rx.status = CURR_RX_DATA;
+		cc->partial_rx.handled_bytes += *raw_buffer_len;
+		cc->partial_rx.status = CURR_RX_DATA;
 		*raw_buffer_len = 0;
 		goto out;
 	} else {
@@ -212,16 +212,16 @@ static int wlcore_rx_getPacketData(struct cc33xx *wl, u8 *raw_buffer_ptr,
 
 	/* Data fully copied */
 
-	rx_align = wl->partial_rx.desc.header_alignment;
-	if (rx_align == WLCORE_RX_BUF_PADDED)
-		skb_pull(wl->partial_rx.skb, RX_BUF_ALIGN);
+	rx_align = cc->partial_rx.desc.header_alignment;
+	if (rx_align == CC33XX_RX_PADDED)
+		skb_pull(cc->partial_rx.skb, RX_BUF_ALIGN);
 
-	extra_bytes = wl->partial_rx.desc.pad_len;
+	extra_bytes = cc->partial_rx.desc.pad_len;
 	if (extra_bytes != 0)
-		skb_trim(wl->partial_rx.skb,
-			 wl->partial_rx.skb->len - extra_bytes);
+		skb_trim(cc->partial_rx.skb,
+			 cc->partial_rx.skb->len - extra_bytes);
 
-	hdr = (struct ieee80211_hdr *)wl->partial_rx.skb->data;
+	hdr = (struct ieee80211_hdr *)cc->partial_rx.skb->data;
 
 	if (ieee80211_is_beacon(hdr->frame_control))
 		beacon = 1;
@@ -230,52 +230,52 @@ static int wlcore_rx_getPacketData(struct cc33xx *wl, u8 *raw_buffer_ptr,
 	if (ieee80211_is_probe_resp(hdr->frame_control))
 		is_probe_resp = 1;
 
-    	cc33xx_rx_status(wl, &wl->partial_rx.desc,
-			 IEEE80211_SKB_RXCB(wl->partial_rx.skb),
+    	cc33xx_rx_status(cc, &cc->partial_rx.desc,
+			 IEEE80211_SKB_RXCB(cc->partial_rx.skb),
 			 beacon, is_probe_resp);
 
 	seq_num = (le16_to_cpu(hdr->seq_ctrl) & IEEE80211_SCTL_SEQ) >> 4;
 	cc33xx_debug(DEBUG_RX, "rx skb 0x%p: %d B %s seq %d link id %d",
-		     wl->partial_rx.skb,
-		     wl->partial_rx.skb->len - wl->partial_rx.desc.pad_len,
-		     beacon ? "beacon" : "", seq_num, wl->partial_rx.desc.hlid);
+		     cc->partial_rx.skb,
+		     cc->partial_rx.skb->len - cc->partial_rx.desc.pad_len,
+		     beacon ? "beacon" : "", seq_num, cc->partial_rx.desc.hlid);
 
 	cc33xx_debug(DEBUG_RX, "rx frame. frame type 0x%x, frame length 0x%x, "
 		     "frame address 0x%lx",
-		     hdr->frame_control, wl->partial_rx.skb->len,
-		     (unsigned long)wl->partial_rx.skb->data);
+		     hdr->frame_control, cc->partial_rx.skb->len,
+		     (unsigned long)cc->partial_rx.skb->data);
 
 	/* Adding frame to queue */
-	skb_queue_tail(&wl->deferred_rx_queue, wl->partial_rx.skb);
-	wl->rx_counter++;
-	wl->partial_rx.status = CURR_RX_START;
+	skb_queue_tail(&cc->deferred_rx_queue, cc->partial_rx.skb);
+	cc->rx_counter++;
+	cc->partial_rx.status = CURR_RX_START;
 
 	/* Make sure the deferred queues don't get too long */
-	defer_count = skb_queue_len(&wl->deferred_tx_queue);
-	defer_count += skb_queue_len(&wl->deferred_rx_queue);
+	defer_count = skb_queue_len(&cc->deferred_tx_queue);
+	defer_count += skb_queue_len(&cc->deferred_rx_queue);
 	if (defer_count >= CC33XX_RX_QUEUE_MAX_LEN)
-		cc33xx_flush_deferred_work(wl);
+		cc33xx_flush_deferred_work(cc);
 	else
-		queue_work(wl->freezable_netstack_wq, &wl->netstack_work);
+		queue_work(cc->freezable_netstack_wq, &cc->netstack_work);
 
 out:
     	return (prev_buffer_len - *raw_buffer_len);
 }
 
-static int wlcore_rx_dropPacketData(struct cc33xx *wl, u8 *raw_buffer_ptr,
+static int cc33xx_rx_dropPacketData(struct cc33xx *cc, u8 *raw_buffer_ptr,
 				    u16 *raw_buffer_len)
 {
 	u16 prev_buffer_len = *raw_buffer_len;
 
 	/* Can we drop the entire frame ? */
 	if (*raw_buffer_len >=
-		(wl->partial_rx.original_bytes - wl->partial_rx.handled_bytes)){
-		*raw_buffer_len -= wl->partial_rx.original_bytes -
-				wl->partial_rx.handled_bytes;
-		wl->partial_rx.handled_bytes = 0;
-		wl->partial_rx.status = CURR_RX_START;
+		(cc->partial_rx.original_bytes - cc->partial_rx.handled_bytes)){
+		*raw_buffer_len -= cc->partial_rx.original_bytes -
+				cc->partial_rx.handled_bytes;
+		cc->partial_rx.handled_bytes = 0;
+		cc->partial_rx.status = CURR_RX_START;
 	} else {
-		wl->partial_rx.handled_bytes += *raw_buffer_len;
+		cc->partial_rx.handled_bytes += *raw_buffer_len;
 		*raw_buffer_len = 0;
 	}
 
@@ -284,18 +284,18 @@ static int wlcore_rx_dropPacketData(struct cc33xx *wl, u8 *raw_buffer_ptr,
 
 /* Handle single packet from the RX buffer. We don't have to be aligned to
  * packet boundary (buffer may start \ end in the middle of packet) */
-static void cc33xx_rx_handle_packet(struct cc33xx *wl, u8 *raw_buffer_ptr,
+static void cc33xx_rx_handle_packet(struct cc33xx *cc, u8 *raw_buffer_ptr,
 				    u16 *raw_buffer_len)
 {
 	struct cc33xx_rx_descriptor *desc;
 	u16 consumedBytes;
 
-	if (CURR_RX_START == wl->partial_rx.status) {
+	if (CURR_RX_START == cc->partial_rx.status) {
 		BUG_ON(*raw_buffer_len < 2);
 		desc = (struct cc33xx_rx_descriptor *)raw_buffer_ptr;
-		wl->partial_rx.original_bytes = desc->length;
-		wl->partial_rx.handled_bytes = 0;
-		wl->partial_rx.status = CURR_RX_DESC;
+		cc->partial_rx.original_bytes = desc->length;
+		cc->partial_rx.handled_bytes = 0;
+		cc->partial_rx.status = CURR_RX_DESC;
 
 		cc33xx_debug(DEBUG_RX, "rx frame. desc length 0x%x, "
 			"alignment 0x%x, padding 0x%x",
@@ -303,23 +303,23 @@ static void cc33xx_rx_handle_packet(struct cc33xx *wl, u8 *raw_buffer_ptr,
 	}
 
 	/* start \ continue copy descriptor */
-	if (CURR_RX_DESC == wl->partial_rx.status) {
-		consumedBytes = wlcore_rx_getPacketDescriptor(wl,
+	if (CURR_RX_DESC == cc->partial_rx.status) {
+		consumedBytes = cc33xx_rx_getPacketDescriptor(cc,
 							      raw_buffer_ptr,
 							      raw_buffer_len);
 		raw_buffer_ptr += consumedBytes;
 	}
 
 	/* Check if we are in the middle of dropped packet */
-	if (unlikely(CURR_RX_DROP == wl->partial_rx.status)){
-		consumedBytes = wlcore_rx_dropPacketData(wl, raw_buffer_ptr,
+	if (unlikely(CURR_RX_DROP == cc->partial_rx.status)){
+		consumedBytes = cc33xx_rx_dropPacketData(cc, raw_buffer_ptr,
 							raw_buffer_len);
 		raw_buffer_ptr += consumedBytes;
    	}
 
 	/* start \ continue copy descriptor */
-	if (CURR_RX_DATA == wl->partial_rx.status) {
-		consumedBytes = wlcore_rx_getPacketData(wl, raw_buffer_ptr,
+	if (CURR_RX_DATA == cc->partial_rx.status) {
+		consumedBytes = cc33xx_rx_getPacketData(cc, raw_buffer_ptr,
 							raw_buffer_len);
 		raw_buffer_ptr += consumedBytes;
 	}
@@ -333,7 +333,7 @@ static void cc33xx_rx_handle_packet(struct cc33xx *wl, u8 *raw_buffer_ptr,
  * The last packet may be truncated in the middle, and should be saved for next
  * iteration.
  */
-int wlcore_rx(struct cc33xx *wl, u8 *rx_buf_ptr, u16 rx_buf_len)
+int cc33xx_rx(struct cc33xx *cc, u8 *rx_buf_ptr, u16 rx_buf_len)
 {
 	u16 local_rx_buffer_len = rx_buf_len;
 	u16 pkt_offset = 0;
@@ -352,7 +352,7 @@ int wlcore_rx(struct cc33xx *wl, u8 *rx_buf_ptr, u16 rx_buf_len)
 		* be dropped.
 		*/
 		prev_rx_buf_len = local_rx_buffer_len;
-		cc33xx_rx_handle_packet(wl, rx_buf_ptr + pkt_offset,
+		cc33xx_rx_handle_packet(cc, rx_buf_ptr + pkt_offset,
 					&local_rx_buffer_len);
 		consumed_bytes = prev_rx_buf_len - local_rx_buffer_len;
 
@@ -360,14 +360,14 @@ int wlcore_rx(struct cc33xx *wl, u8 *rx_buf_ptr, u16 rx_buf_len)
 
 		cc33xx_debug(DEBUG_RX, "end rx loop. buffer length %d, "
 			     "packet counter %d, current packet status %d",
-			     local_rx_buffer_len, wl->rx_counter,
-			     wl->partial_rx.status);
+			     local_rx_buffer_len, cc->rx_counter,
+			     cc->partial_rx.status);
 	}
 
 	return 0;
 }
 
-int cc33xx_parse_wowlan_search_pattern(const char *input, u8 *pattern, u8 *mask,
+int cc33xx_parse_wowlan_hex_string(const char *input, u8 *pattern, u8 *mask,
 					size_t max_len, bool *has_mask)
 {
 	size_t byte_count = 0;
@@ -445,24 +445,146 @@ int cc33xx_parse_wowlan_search_pattern(const char *input, u8 *pattern, u8 *mask,
 	return byte_count;
 }
 
-int cc33xx_add_wowlan_search_pattern(struct cc33xx *cc, u16 offset,
-				     const u8 *pattern_data, int pattern_len,
-				     bool has_mask)
+int cc33xx_parse_wowlan_search_pattern(char *input,
+					u8 *header_bytes, int *header_len,
+					u8 *header_mask, bool *header_has_mask,
+					u8 *payload_bytes, int *payload_len,
+					u8 *payload_mask, bool *payload_has_mask,
+					u16 *payload_offset, bool *search_mode)
 {
-	struct cc33xx_rx_filter *filter;
-	u8 flags;
-	int ret;
+	char *header_text, *payload_text, *offset_str, *plus_sign, *pipe;
+	int ret, parsed_bytes;
 
-	if (!pattern_data || pattern_len <= 0) {
-		cc33xx_error("Invalid pattern parameters");
+	*header_len = 0;
+	*payload_len = 0;
+	*header_has_mask = false;
+	*payload_has_mask = false;
+	*payload_offset = 0;
+	*search_mode = true;
+
+	/* Parse mode flag: -f for fixed, -s for search mode (default) */
+	if (input[0] == '-' && input[1] == 'f' &&
+	    (input[2] == ' ' || input[2] == '\t')) {
+		*search_mode = false;
+		input += 2;
+		while (*input == ' ' || *input == '\t')
+			input++;
+	} else if (input[0] == '-' && input[1] == 's' &&
+	           (input[2] == ' ' || input[2] == '\t')) {
+		input += 2;
+		while (*input == ' ' || *input == '\t')
+			input++;
+	}
+
+	/* Parse format: [header bytes]|[offset+][payload pattern] */
+	plus_sign = strchr(input, '+');
+	pipe = strchr(input, '|');
+
+	if (plus_sign && !pipe) {
+		cc33xx_error("Offset '+' requires '|' separator with 14-byte header");
 		return -EINVAL;
 	}
+
+	header_text = input;
+
+	if (pipe) {
+		char *str;
+
+		/* Split at pipe: header | payload */
+		*pipe = '\0';
+		payload_text = pipe + 1;
+
+		parsed_bytes = 1;
+		str = header_text;
+		while (*str) {
+			if (*str == ':')
+				parsed_bytes++;
+			str++;
+		}
+
+		if (parsed_bytes != CC33XX_RX_FILTER_ETH_HEADER_SIZE) {
+			cc33xx_error("Header pattern part must be exactly %d bytes when searching for pattern in payload, got %d bytes",
+				     CC33XX_RX_FILTER_ETH_HEADER_SIZE, parsed_bytes);
+			return -EINVAL;
+		}
+	} else {
+		payload_text = NULL;
+	}
+
+	ret = cc33xx_parse_wowlan_hex_string(header_text, header_bytes,
+					     header_mask,
+					     CC33XX_RX_FILTER_ETH_HEADER_SIZE,
+					     header_has_mask);
+	if (ret < 0) {
+		cc33xx_error("Invalid header format");
+		return ret;
+	}
+	*header_len = ret;
+
+	/* Parse payload if present */
+	if (payload_text && strlen(payload_text) > 0) {
+		plus_sign = strchr(payload_text, '+');
+		if (plus_sign) {
+			*plus_sign = '\0';
+			offset_str = payload_text;
+			payload_text = plus_sign + 1;
+
+			ret = kstrtou16(offset_str, 10, payload_offset);
+			if (ret < 0) {
+				cc33xx_error("Invalid payload offset '%s'", offset_str);
+				return -EINVAL;
+			}
+		}
+
+		if (strlen(payload_text) > 0) {
+			ret = cc33xx_parse_wowlan_hex_string(payload_text, payload_bytes,
+							     payload_mask,
+							     CC33XX_RX_FILTER_MAX_PATTERN_SIZE,
+							     payload_has_mask);
+			if (ret < 0) {
+				cc33xx_error("Invalid payload pattern format");
+				return ret;
+			}
+			*payload_len = ret;
+		}
+	}
+
+	return 0;
+}
+
+int cc33xx_add_wowlan_search_pattern(struct cc33xx *cc, char *input)
+{
+	struct cc33xx_rx_filter *filter;
+	u8 header_bytes[CC33XX_RX_FILTER_ETH_HEADER_SIZE * 2];
+	u8 payload_bytes[CC33XX_RX_FILTER_MAX_PATTERN_SIZE * 2];
+	u8 *header_mask = header_bytes + CC33XX_RX_FILTER_ETH_HEADER_SIZE;
+	u8 *payload_mask = payload_bytes + CC33XX_RX_FILTER_MAX_PATTERN_SIZE;
+	u8 field_buffer[CC33XX_RX_FILTER_MAX_PATTERN_SIZE * 2];
+	const u8 *field_data;
+	int header_len, payload_len;
+	bool header_has_mask, payload_has_mask;
+	bool search_mode;
+	u16 payload_offset;
+	u8 flags, len;
+	u16 offset;
+	int ret, i, j;
+	int field_num = 0;
 
 	if (cc->wowlan_search.filter_count >= CC33XX_MAX_RX_FILTERS) {
 		cc33xx_error("Maximum filters reached (%d/%d)",
 			     cc->wowlan_search.filter_count, CC33XX_MAX_RX_FILTERS);
 		return -ENOSPC;
 	}
+
+	/* Parse pattern string into header and payload components */
+	ret = cc33xx_parse_wowlan_search_pattern(input,
+						  header_bytes, &header_len,
+						  header_mask, &header_has_mask,
+						  payload_bytes, &payload_len,
+						  payload_mask, &payload_has_mask,
+						  &payload_offset, &search_mode);
+	if (ret < 0)
+		return ret;
 
 	filter = cc33xx_rx_filter_alloc();
 	if (!filter) {
@@ -472,16 +594,76 @@ int cc33xx_add_wowlan_search_pattern(struct cc33xx *cc, u16 offset,
 
 	filter->action = FILTER_SIGNAL;
 
-	/* Set flags: SEARCH mode + optional MASK flag */
-	flags = CC33XX_RX_FILTER_FLAG_SEARCH_ANYWHERE;
-	if (has_mask)
-		flags |= CC33XX_RX_FILTER_FLAG_MASKED;
+	/* Process header: split into multiple fields at wildcard boundaries */
+	if (header_len > 0) {
+		i = 0;
+		while (i < header_len) {
+			if (header_has_mask && header_mask[i] == 0x00) {
+				i++;
+				continue;
+			}
 
-	ret = cc33xx_rx_filter_alloc_field(filter, offset, flags,
-					   pattern_data, pattern_len);
-	if (ret < 0) {
-		cc33xx_rx_filter_free(filter);
-		return ret;
+			for (j = i; j < header_len; j++) {
+				if (header_has_mask && header_mask[j] == 0x00)
+					break;
+			}
+
+			/* Create field for this contiguous sequence */
+			offset = i;
+			len = j - i;
+			flags = CC33XX_RX_FILTER_FLAG_ETHERNET_HEADER;
+			if (header_has_mask) {
+				/* Masked: send [pattern][mask] format */
+				flags |= CC33XX_RX_FILTER_FLAG_MASKED;
+				memcpy(field_buffer, &header_bytes[i], len);
+				memcpy(field_buffer + len, &header_mask[i], len);
+				field_data = field_buffer;
+			} else {
+				/* Unmasked: send pattern only */
+				field_data = &header_bytes[i];
+			}
+
+			ret = cc33xx_rx_filter_alloc_field(filter, offset, flags,
+							   field_data, len);
+
+			if (ret < 0) {
+				cc33xx_error("Failed to add header field %d", field_num);
+				cc33xx_rx_filter_free(filter);
+				return ret;
+			}
+
+			field_num++;
+			i = j;
+		}
+	}
+
+	/* Process payload: add single field with search-anywhere flag (if search mode) */
+	if (payload_len > 0) {
+		flags = 0;
+		if (search_mode)
+			flags |= CC33XX_RX_FILTER_FLAG_SEARCH_ANYWHERE;
+
+		if (payload_has_mask) {
+			/* Masked: send [pattern][mask] format */
+			flags |= CC33XX_RX_FILTER_FLAG_MASKED;
+			memcpy(field_buffer, payload_bytes, payload_len);
+			memcpy(field_buffer + payload_len, payload_mask, payload_len);
+			field_data = field_buffer;
+		} else {
+			/* Unmasked: send pattern only */
+			field_data = payload_bytes;
+		}
+
+		ret = cc33xx_rx_filter_alloc_field(filter, payload_offset, flags,
+						   field_data, payload_len);
+
+		if (ret < 0) {
+			cc33xx_error("Failed to add payload field");
+			cc33xx_rx_filter_free(filter);
+			return ret;
+		}
+
+		field_num++;
 	}
 
 	cc->wowlan_search.active_filters[cc->wowlan_search.filter_count] = filter;
@@ -503,6 +685,11 @@ int cc33xx_clear_wowlan_search_patterns(struct cc33xx *cc)
 	ret = cc33xx_acx_default_rx_filter_enable(cc, 0, FILTER_SIGNAL);
 	if (ret < 0)
 		cc33xx_error("Failed to reset default RX filter: %d", ret);
+
+	/* Disable ARP offload since rx filtering is disabled */
+	ret = cc33xx_acx_arp_offload(cc, false);
+	if (ret)
+		cc33xx_warning("Failed to disable ARP offload: %d", ret);
 
 out:
 	cc33xx_free_wowlan_patterns_memory(cc);
@@ -596,18 +783,18 @@ int cc33xx_get_wowlan_search_filters(struct cc33xx *cc, struct cc33xx_rx_filter 
 }
 
 #ifdef CONFIG_PM
-int cc33xx_rx_filter_enable(struct cc33xx *wl, int index, bool enable,
+int cc33xx_rx_filter_enable(struct cc33xx *cc, int index, bool enable,
 			    struct cc33xx_rx_filter *filter)
 {
 	int ret;
 
-	if (!!test_bit(index, wl->rx_filter_enabled) == enable) {
+	if (!!test_bit(index, cc->rx_filter_enabled) == enable) {
 		cc33xx_warning("Request to enable an already "
 			"enabled rx filter %d", index);
 		return 0;
 	}
 
-	ret = cc33xx_acx_set_rx_filter(wl, index, enable, filter);
+	ret = cc33xx_acx_set_rx_filter(cc, index, enable, filter);
 
 	if (ret) {
 		cc33xx_error("Failed to %s rx data filter %d (err=%d)",
@@ -616,21 +803,21 @@ int cc33xx_rx_filter_enable(struct cc33xx *wl, int index, bool enable,
 	}
 
 	if (enable)
-		__set_bit(index, wl->rx_filter_enabled);
+		__set_bit(index, cc->rx_filter_enabled);
 	else
-		__clear_bit(index, wl->rx_filter_enabled);
+		__clear_bit(index, cc->rx_filter_enabled);
 
 	return 0;
 }
 
-int cc33xx_rx_filter_clear_all(struct cc33xx *wl)
+int cc33xx_rx_filter_clear_all(struct cc33xx *cc)
 {
 	int i, ret = 0;
 
 	for (i = 0; i < CC33XX_MAX_RX_FILTERS; i++) {
-		if (!test_bit(i, wl->rx_filter_enabled))
+		if (!test_bit(i, cc->rx_filter_enabled))
 			continue;
-		ret = cc33xx_rx_filter_enable(wl, i, 0, NULL);
+		ret = cc33xx_rx_filter_enable(cc, i, 0, NULL);
 		if (ret)
 			goto out;
 	}
@@ -639,8 +826,8 @@ out:
 	return ret;
 }
 #else
-int cc33xx_rx_filter_enable(struct cc33xx *wl, int index, bool enable,
+int cc33xx_rx_filter_enable(struct cc33xx *cc, int index, bool enable,
 			    struct cc33xx_rx_filter *filter) {}
 
-int cc33xx_rx_filter_clear_all(struct cc33xx *wl) {}
+int cc33xx_rx_filter_clear_all(struct cc33xx *cc) {}
 #endif /* CONFIG_PM */

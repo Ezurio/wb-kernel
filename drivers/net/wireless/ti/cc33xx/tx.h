@@ -46,7 +46,7 @@
 #define CC33XX_TID_MGMT 7
 
 /* stop a ROC for pending authentication reply after this time (ms) */
-#define WLCORE_PEND_AUTH_ROC_TIMEOUT     1000
+#define CC33XX_PEND_AUTH_ROC_TIMEOUT     1000
 #define CC33xx_PEND_ROC_COMPLETE_TIMEOUT 2000 
 
 struct cc33xx_tx_mem {
@@ -118,55 +118,55 @@ struct cc33xx_tx_hw_res_descr {
 	u8 spare;
 } __packed;
 
-enum wlcore_queue_stop_reason {
-	WLCORE_QUEUE_STOP_REASON_WATERMARK,
-	WLCORE_QUEUE_STOP_REASON_FW_RESTART,
-	WLCORE_QUEUE_STOP_REASON_FLUSH,
-	WLCORE_QUEUE_STOP_REASON_SPARE_BLK, /* 18xx specific */
+enum cc33xx_queue_stop_reason {
+	CC33XX_QUEUE_STOP_REASON_WATERMARK,
+	CC33XX_QUEUE_STOP_REASON_FW_RESTART,
+	CC33XX_QUEUE_STOP_REASON_FLUSH,
+	CC33XX_QUEUE_STOP_REASON_SPARE_BLK,
 };
 
 
 int cc33xx_tx_get_queue(int queue);
-int cc33xx_tx_total_queue_count(struct cc33xx *wl);
-void cc33xx_tx_immediate_complete(struct cc33xx *wl);
+int cc33xx_tx_total_queue_count(struct cc33xx *cc);
+void cc33xx_tx_immediate_complete(struct cc33xx *cc);
 void cc33xx_tx_work(struct work_struct *work);
-int wlcore_tx_work_locked(struct cc33xx *wl);
-void cc33xx_tx_reset_wlvif(struct cc33xx *wl, struct cc33xx_vif *wlvif);
-void cc33xx_tx_reset(struct cc33xx *wl);
-void cc33xx_tx_flush(struct cc33xx *wl);
-u8 wlcore_rate_to_idx(struct cc33xx *wl, u8 rate, enum nl80211_band band);
-u32 cc33xx_tx_enabled_rates_get(struct cc33xx *wl, u32 rate_set,
+int cc33xx_tx_work_locked(struct cc33xx *cc);
+void cc33xx_tx_reset_wlvif(struct cc33xx *cc, struct cc33xx_vif *wlvif);
+void cc33xx_tx_reset(struct cc33xx *cc);
+void cc33xx_tx_flush(struct cc33xx *cc);
+u8 cc33xx_rate_to_idx(struct cc33xx *cc, u8 rate, enum nl80211_band band);
+u32 cc33xx_tx_enabled_rates_get(struct cc33xx *cc, u32 rate_set,
 				enum nl80211_band rate_band);
-u32 cc33xx_tx_min_rate_get(struct cc33xx *wl, u32 rate_set);
-u8 cc33xx_tx_get_hlid(struct cc33xx *wl, struct cc33xx_vif *wlvif,
+u32 cc33xx_tx_min_rate_get(struct cc33xx *cc, u32 rate_set);
+u8 cc33xx_tx_get_hlid(struct cc33xx *cc, struct cc33xx_vif *wlvif,
 		      struct sk_buff *skb, struct ieee80211_sta *sta);
-void cc33xx_tx_reset_link_queues(struct cc33xx *wl, u8 hlid);
-void cc33xx_handle_tx_low_watermark(struct cc33xx *wl);
-bool cc33xx_is_dummy_packet(struct cc33xx *wl, struct sk_buff *skb);
-//unsigned int wlcore_calc_packet_alignment(struct cc33xx *wl,
+void cc33xx_tx_reset_link_queues(struct cc33xx *cc, u8 hlid);
+void cc33xx_handle_tx_low_watermark(struct cc33xx *cc);
+bool cc33xx_is_dummy_packet(struct cc33xx *cc, struct sk_buff *skb);
+//unsigned int cc33xx_calc_packet_alignment(struct cc33xx *cc,
 //					  unsigned int packet_length);
-void cc33xx_free_tx_id(struct cc33xx *wl, int id);
-void wlcore_stop_queue_locked(struct cc33xx *wl, struct cc33xx_vif *wlvif,
-			      u8 queue, enum wlcore_queue_stop_reason reason);
-void wlcore_stop_queues(struct cc33xx *wl,
-			enum wlcore_queue_stop_reason reason);
-void wlcore_wake_queues(struct cc33xx *wl,
-			enum wlcore_queue_stop_reason reason);
-bool wlcore_is_queue_stopped_by_reason(struct cc33xx *wl,
+void cc33xx_free_tx_id(struct cc33xx *cc, int id);
+void cc33xx_stop_queue_locked(struct cc33xx *cc, struct cc33xx_vif *wlvif,
+			      u8 queue, enum cc33xx_queue_stop_reason reason);
+void cc33xx_stop_queues(struct cc33xx *cc,
+			enum cc33xx_queue_stop_reason reason);
+void cc33xx_wake_queues(struct cc33xx *cc,
+			enum cc33xx_queue_stop_reason reason);
+bool cc33xx_is_queue_stopped_by_reason(struct cc33xx *cc,
 				       struct cc33xx_vif *wlvif, u8 queue,
-				       enum wlcore_queue_stop_reason reason);
-bool wlcore_is_queue_stopped_by_reason_locked(struct cc33xx *wl,
+				       enum cc33xx_queue_stop_reason reason);
+bool cc33xx_is_queue_stopped_by_reason_locked(struct cc33xx *cc,
 					      struct cc33xx_vif *wlvif,
 					      u8 queue,
-					 enum wlcore_queue_stop_reason reason);
-bool wlcore_is_queue_stopped_locked(struct cc33xx *wl, struct cc33xx_vif *wlvif,
+					 enum cc33xx_queue_stop_reason reason);
+bool cc33xx_is_queue_stopped_locked(struct cc33xx *cc, struct cc33xx_vif *wlvif,
 				    u8 queue);
 
 /* from main.c */
-void cc33xx_free_sta(struct cc33xx *wl, struct cc33xx_vif *wlvif, u8 hlid);
-void cc33xx_rearm_tx_watchdog_locked(struct cc33xx *wl);
-void wlcore_update_inconn_sta(struct cc33xx *wl, struct cc33xx_vif *wlvif,
+void cc33xx_free_sta(struct cc33xx *cc, struct cc33xx_vif *wlvif, u8 hlid);
+void cc33xx_rearm_tx_watchdog_locked(struct cc33xx *cc);
+void cc33xx_update_inconn_sta(struct cc33xx *cc, struct cc33xx_vif *wlvif,
 			      struct cc33xx_station *wl_sta, bool in_conn);
-void cc33xx_queue_recovery_work(struct cc33xx *wl);
+void cc33xx_queue_recovery_work(struct cc33xx *cc);
 
 #endif /* __TX_H__ */

@@ -12,7 +12,7 @@
 #include <linux/of_irq.h>
 #include <linux/regulator/consumer.h>
 
-#include "wlcore.h"
+#include "cc33xx.h"
 #include "io.h"
 
 
@@ -429,7 +429,7 @@ static int cc33xx_spi_set_power(struct device *child, bool enable)
  * cc33xx_spi_set_block_size
  *
  * This function is not needed for spi mode, but need to be present.
- * Without it defined the wlcore fallback to use the wrong packet
+ * Without it defined the cc33xx fallback to use the wrong packet
  * allignment on tx.
  */
 static void cc33xx_spi_set_block_size(struct device *child,
@@ -446,7 +446,7 @@ static void cc33xx_spi_set_irq_handler(struct device *child, void* irq_handler)
 {
 	struct cc33xx_spi_glue *glue = dev_get_drvdata(child->parent);
 	struct platform_device *pdev = glue->core;
-	struct wlcore_platdev_data *pdev_data = dev_get_platdata(&pdev->dev);
+	struct cc33xx_platdev_data *pdev_data = dev_get_platdata(&pdev->dev);
 
 	pdev_data->irq_handler = irq_handler;
 }
@@ -455,7 +455,7 @@ static void cc33xx_spi_enable_irq (struct device *child)
 {
 	struct cc33xx_spi_glue *glue = dev_get_drvdata(child->parent);
 	struct platform_device *pdev = glue->core;
-	struct wlcore_platdev_data *pdev_data = dev_get_platdata(&pdev->dev);
+	struct cc33xx_platdev_data *pdev_data = dev_get_platdata(&pdev->dev);
 
 	enable_irq(pdev_data->gpio_irq_num);
 }
@@ -464,7 +464,7 @@ static void cc33xx_spi_disable_irq (struct device *child)
 {
 	struct cc33xx_spi_glue *glue = dev_get_drvdata(child->parent);
 	struct platform_device *pdev = glue->core;
-	struct wlcore_platdev_data *pdev_data = dev_get_platdata(&pdev->dev);
+	struct cc33xx_platdev_data *pdev_data = dev_get_platdata(&pdev->dev);
 
 	disable_irq_nosync(pdev_data->gpio_irq_num);
 }
@@ -473,7 +473,7 @@ static void cc33xx_spi_sync_irq (struct device *child)
 {
 	struct cc33xx_spi_glue *glue = dev_get_drvdata(child->parent);
 	struct platform_device *pdev = glue->core;
-	struct wlcore_platdev_data *pdev_data = dev_get_platdata(&pdev->dev);
+	struct cc33xx_platdev_data *pdev_data = dev_get_platdata(&pdev->dev);
 
 	synchronize_irq(pdev_data->gpio_irq_num);
 }
@@ -502,7 +502,7 @@ static irqreturn_t cc33xx_spi_irq_handler(int irq, void *cookie)
 	struct spi_device *spi = cookie;
 	struct cc33xx_spi_glue *glue = spi_get_drvdata(spi);
 	struct platform_device *pdev = glue->core;
-	struct wlcore_platdev_data *pdev_data = dev_get_platdata(&pdev->dev);
+	struct cc33xx_platdev_data *pdev_data = dev_get_platdata(&pdev->dev);
 
 	BUG_ON(!pdev_data->irq_handler);
 	pdev_data->irq_handler(pdev);
@@ -526,26 +526,26 @@ static struct cc33xx_if_operations spi_ops = {
 	.sync_irq			= cc33xx_spi_sync_irq,
 };
 
-static const struct of_device_id wlcore_spi_of_match_table[] = {
+static const struct of_device_id cc33xx_spi_of_match_table[] = {
 	{ .compatible = "ti,cc33xx", .data = &cc33xx_data},
 	{ }
 };
-MODULE_DEVICE_TABLE(of, wlcore_spi_of_match_table);
+MODULE_DEVICE_TABLE(of, cc33xx_spi_of_match_table);
 
 /**
- * wlcore_probe_of - DT node parsing.
+ * cc33xx_probe_of - DT node parsing.
  * @spi: SPI slave device parameters.
  * @res: resource parameters.
  * @glue: cc33xx SPI bus to slave device glue parameters.
- * @pdev_data: wlcore device parameters
+ * @pdev_data: cc33xx device parameters
  */
-static int wlcore_probe_of(struct spi_device *spi, struct cc33xx_spi_glue *glue,
-			   int *irq, struct wlcore_platdev_data *pdev_data)
+static int cc33xx_probe_of(struct spi_device *spi, struct cc33xx_spi_glue *glue,
+			   int *irq, struct cc33xx_platdev_data *pdev_data)
 {
 	struct device_node *dt_node = spi->dev.of_node;
 	const struct of_device_id *of_id;
 
-	of_id = of_match_node(wlcore_spi_of_match_table, dt_node);
+	of_id = of_match_node(cc33xx_spi_of_match_table, dt_node);
 	if (!of_id)
 		return -ENODEV;
 
@@ -568,9 +568,10 @@ static int wlcore_probe_of(struct spi_device *spi, struct cc33xx_spi_glue *glue,
 static int spi_cc33xx_probe(struct spi_device *spi)
 {
 	struct cc33xx_spi_glue *glue;
-	struct wlcore_platdev_data *pdev_data;
+	struct cc33xx_platdev_data *pdev_data;
 	int irq;
 	int ret;
+	int irq_flags;
 
 	pdev_data = devm_kzalloc(&spi->dev, sizeof(*pdev_data), GFP_KERNEL);
 	if (!pdev_data)
@@ -600,18 +601,23 @@ static int spi_cc33xx_probe(struct spi_device *spi)
 		return PTR_ERR(glue->reg);
 	}
 
-	ret = wlcore_probe_of(spi, glue, &irq, pdev_data);
+	ret = cc33xx_probe_of(spi, glue, &irq, pdev_data);
 	if (ret) {
 		dev_err(glue->dev,
 			"can't get device tree parameters (%d)\n", ret);
 		return ret;
 	}
 
+	irq_flags = irqd_get_trigger_type(irq_get_irq_data(irq));
+
 	irq_set_status_flags(irq, IRQ_NOAUTOEN);
+
+	if (irq_flags & (IRQF_TRIGGER_HIGH | IRQF_TRIGGER_LOW))
+			irq_flags |= IRQF_ONESHOT;
 
 	ret = request_threaded_irq(
 		irq, cc33xx_spi_irq_hard_handler, cc33xx_spi_irq_handler,
-		IRQF_TRIGGER_HIGH|IRQF_ONESHOT, pdev_data->family->name, spi);
+		irq_flags, pdev_data->family->name, spi);
 	if (ret) {
 		dev_err(glue->dev, "can't register GPIO IRQ handler\n");
 		goto out_dev_put;
@@ -658,7 +664,7 @@ static void cc33xx_remove(struct spi_device *spi)
 {
 	struct cc33xx_spi_glue *glue = spi_get_drvdata(spi);
 	struct platform_device *pdev = glue->core;
-	struct wlcore_platdev_data *pdev_data = dev_get_platdata(&pdev->dev);
+	struct cc33xx_platdev_data *pdev_data = dev_get_platdata(&pdev->dev);
 
 	platform_device_unregister(glue->core);
 
@@ -670,7 +676,7 @@ static void cc33xx_remove(struct spi_device *spi)
 static struct spi_driver cc33xx_spi_driver = {
 	.driver = {
 		.name		= "cc33xx_spi",
-		.of_match_table = of_match_ptr(wlcore_spi_of_match_table),
+		.of_match_table = of_match_ptr(cc33xx_spi_of_match_table),
 	},
 
 	.probe		= spi_cc33xx_probe,
