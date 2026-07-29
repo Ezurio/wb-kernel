@@ -694,6 +694,7 @@ static int btti_sdio_tx_packet(struct btti_private *private_data,
 	payload = skb->data;
 	data_send_size = roundup(packet_len, BTSDIO_TX_ALIGN);
 	alignment_required = (data_send_size != packet_len);
+	alignment_required |= !IS_ALIGNED((unsigned long) skb->data, 4);
 
 	if(alignment_required) 
 	{
@@ -702,7 +703,7 @@ static int btti_sdio_tx_packet(struct btti_private *private_data,
 			BT_ERR("[bt sdio] TX allocation failed");
 			return -ENOMEM;
 		}
-		memcpy(tmpbuf, payload, data_send_size);
+		memcpy(tmpbuf, payload, packet_len);
 	}
 	else
 	{
