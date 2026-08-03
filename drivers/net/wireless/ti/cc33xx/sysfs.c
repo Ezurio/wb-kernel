@@ -40,11 +40,10 @@ static ssize_t ble_enable_store(struct device *dev,
 		return -EINVAL;
 	}
 
-	if (value == cc->ble_enable) {
-		return count;
-	}
-
 	mutex_lock(&cc->mutex);
+
+	if (value == cc->ble_enable)
+		goto out;
 
 	if (unlikely(cc->state != CC33XX_STATE_ON)) {
 		/* this will show up on "read" in case we are off */
@@ -65,10 +64,16 @@ static ssize_t slow_clock_type_show(struct device *dev,
 {
 	struct cc33xx *cc = dev_get_drvdata(dev);
 	ssize_t len;
+	int ret;
+
+	ret = mutex_lock_interruptible(&cc->mutex);
+	if (ret < 0)
+		return -ERESTARTSYS;
 
 	cc33xx_acx_get_slow_clock_type(cc);
-
 	len = sysfs_emit(buf, "%d\n", cc->is_ext_slw_clk);
+
+	mutex_unlock(&cc->mutex);
 
 	return len;
 }
@@ -117,151 +122,6 @@ static const struct bin_attribute fwlog_attr = {
 	.attr = { .name = "fwlog", .mode = 0400 },
 	.read = cc33xx_sysfs_read_fwlog,
 };
-
-
-static ssize_t regdomain_txControl_param_show(struct device *dev,
-				  struct device_attribute *attr,
-				  char *buf)
-{
-	return 0;
-}
-
-static ssize_t regdomain_txControl_param_store(struct device *dev,
-				   struct device_attribute *attr,
-				   const char *buf, size_t count)
-{
-	struct cc33xx *cc = dev_get_drvdata(dev);
-	struct acx_phy_regdomain_tx_control_params params;
-	int ret = 0;
-	char* buffer;
-	char * pToken;
-	int converted_token = 0;
-
-	buffer = kzalloc(count, GFP_KERNEL);
-	if (!buffer) {
-		ret = -ENOMEM;
-		cc33xx_warning("error in regdomain and tx control params set (memory): %d", ret);
-		return ret;
-	}
-
-	strncpy(buffer, buf, count);
-	if(-EFAULT == ret){
-		cc33xx_warning("error in regdomain and tx control params set: %d", ret);
-		kfree(buffer);
-		return ret;
-	}
-
-	pToken = strsep(&buffer, " ");
-	
-	ret = kstrtoint(pToken, 10, &converted_token);
-	if (ret < 0) 
-	{
-		ret = -EINVAL;
-		kfree(buffer);
-		cc33xx_warning("error in bitmask value parsing");
-		return ret;
-    }
-
-	params.bitmask = converted_token;
-
-
-	pToken = strsep(&buffer, " ");
-
-	ret = kstrtoint(pToken, 10, &converted_token);
-	if (ret < 0) 
-	{
-		ret = -EINVAL;
-		kfree(buffer);
-		cc33xx_warning("error in reg_domain value parsing");
-		return ret;
-    }
-
-	params.reg_domain = converted_token;
-
-	pToken = strsep(&buffer, " ");
-
-	for(int i = 0; i < BLE_LIM_CHANNELS_COUNT ; i++)
-	{
-		ret = kstrtoint(pToken, 10, &converted_token);
-		if (ret < 0) 
-		{
-			ret = -EINVAL;
-			kfree(buffer);
-			cc33xx_warning("error in ble_ch_lim_1M value parsing");
-			return ret;
-		}
-
-		params.ble_ch_lim_1M[i] = converted_token;
-
-		pToken = strsep(&buffer, " ");
-	}
-
-	for(int i = 0; i < BLE_LIM_CHANNELS_COUNT ;i++)
-	{
-
-		ret = kstrtoint(pToken, 10, &converted_token);
-
-		if (ret < 0) 
-		{
-			ret = -EINVAL;
-			kfree(buffer);
-			cc33xx_warning("error in ble_ch_lim_2M value parsing");
-			return ret;
-		}
-
-		params.ble_ch_lim_2M[i] = converted_token;
-
-		pToken = strsep(&buffer, " ");
-	}
-
-	ret = kstrtoint(pToken, 10, &converted_token);
-	if (ret < 0) 
-	{
-		ret = -EINVAL;
-		kfree(buffer);
-		cc33xx_warning("error in country_code value parsing");
-		return ret;
-	}
-	
-	params.country_code = converted_token;
-
-	pToken = strsep(&buffer, " ");
-
-	for(int i = 0; i < REG_RULES_COUNT ; i++)
-	{
-		ret = kstrtoint(pToken, 10, &converted_token);
-		if (ret < 0) 
-		{
-			ret = -EINVAL;
-			kfree(buffer);
-			cc33xx_warning("error in country_code value parsing");
-			return ret;
-		}
-
-		params.per_channel_power_limit[i] = converted_token;
-
-		pToken = strsep(&buffer, " ");
-	}
-
-	kfree(buffer);
-
-	ret = cc33xx_acx_set_regdoamin_and_tx_control_params(cc,&params);
-
-
-	mutex_lock(&cc->mutex);
-	
-	if (unlikely(cc->state != CC33XX_STATE_ON)) {
-		goto out;
-	}
-
-
-
-out:
-	mutex_unlock(&cc->mutex);
-	return count;
-}
-
-static DEVICE_ATTR_RW(regdomain_txControl_param);
 
 
 static ssize_t wowlan_arp_offload_show(struct device *dev,
@@ -413,8 +273,12 @@ static ssize_t wowlan_mode_show(struct device *dev,
 	if (!cc)
 		return sysfs_emit(buf, "Device not ready\n");
 
+	if (mutex_lock_interruptible(&cc->mutex))
+		return -ERESTARTSYS;
 	len = sysfs_emit(buf, "Current mode: %s\n\n",
 			 cc->wowlan_search.enabled ? "ENABLED" : "DISABLED");
+	mutex_unlock(&cc->mutex);
+
 	len += sysfs_emit_at(buf, len, "Usage:\n");
 	len += sysfs_emit_at(buf, len, "  echo 1 > wowlan_mode    # Enable WoWLAN\n");
 	len += sysfs_emit_at(buf, len, "  echo 0 > wowlan_mode    # Disable WoWLAN\n");
@@ -432,11 +296,6 @@ static ssize_t wowlan_pattern_search_store(struct device *dev,
 	char *input;
 	int ret;
 
-	if (unlikely(cc->state != CC33XX_STATE_ON)) {
-		cc33xx_error("Device not ready for adding pattern");
-		return -EAGAIN;
-	}
-
 	input = kzalloc(count + 1, GFP_KERNEL);
 	if (!input)
 		return -ENOMEM;
@@ -453,7 +312,14 @@ static ssize_t wowlan_pattern_search_store(struct device *dev,
 		goto out_free;
 	}
 
+	if (unlikely(cc->state != CC33XX_STATE_ON)) {
+		cc33xx_error("Device not ready for adding pattern");
+		ret = -EAGAIN;
+		goto out_unlock;
+	}
+
 	ret = cc33xx_add_wowlan_search_pattern(cc, input);
+out_unlock:
 	mutex_unlock(&cc->mutex);
 
 	if (ret < 0)
@@ -564,10 +430,6 @@ int cc33xx_sysfs_init(struct cc33xx *cc)
 	ret = device_create_file(cc->dev, &dev_attr_slow_clock_type);
 	if (ret < 0)
 		cc33xx_error("failed to create sysfs file slow_clock_type");
-		
-	ret = device_create_file(cc->dev, &dev_attr_regdomain_txControl_param);
- 	if (ret < 0)
- 		cc33xx_error("failed to create sysfs file regdomain_txControl_param");
 
 	ret = device_create_file(cc->dev, &dev_attr_wowlan_arp_offload);
 	if (ret < 0)
@@ -598,7 +460,7 @@ void cc33xx_sysfs_free(struct cc33xx *cc)
 {
 	device_remove_bin_file(cc->dev, &fwlog_attr);
 	device_remove_file(cc->dev, &dev_attr_ble_enable);
-	device_remove_file(cc->dev, &dev_attr_regdomain_txControl_param);
+	device_remove_file(cc->dev, &dev_attr_slow_clock_type);
 	device_remove_file(cc->dev, &dev_attr_wowlan_arp_offload);
 	device_remove_file(cc->dev, &dev_attr_wowlan_mode);
 	device_remove_file(cc->dev, &dev_attr_wowlan_pattern_search);

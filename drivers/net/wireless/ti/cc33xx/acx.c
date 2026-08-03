@@ -559,16 +559,20 @@ int cc33xx_acx_init_get_fw_versions(struct cc33xx *cc)
 int cc33xx_acx_get_slow_clock_type(struct cc33xx *cc)
 {
 	struct acx_slow_clk_type *acx;
-	int ret = 0;
+	int ret;
 
 	acx = kzalloc(sizeof(*acx), GFP_KERNEL);
 	if (!acx)
-		ret = -ENOMEM;
-	
+		return -ENOMEM;
+
 	ret = cc33xx_cmd_interrogate(cc, GET_SLOW_CLK_SOURCE, acx,
 			sizeof(struct acx_header), sizeof(struct acx_slow_clk_type));
+	if (ret < 0)
+		goto out;
+
 	cc->is_ext_slw_clk = acx->is_ext_slw_clk;
 
+out:
 	kfree(acx);
 	return ret;
 }
