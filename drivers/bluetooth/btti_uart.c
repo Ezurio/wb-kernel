@@ -483,7 +483,7 @@ static size_t btti_uart_receive_buf(struct serdev_device *serdev, const u8 *data
 		bdev->rx_skb = NULL;
 		print_hex_dump( KERN_DEBUG, "Frame:", DUMP_PREFIX_NONE,
 				16, 1, data, count, true);
-		return 0;
+		return count;
 	}
 
 	bdev->hdev->stat.byte_rx += count;
