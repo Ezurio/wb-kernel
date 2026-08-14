@@ -299,7 +299,7 @@ static void btti_uart_sm_post_event(struct btti_uart_dev *bdev, enum sm_event ev
 {
 	struct event_node *event_node;
 
-	event_node = kzalloc(sizeof(*event_node), GFP_KERNEL);
+	event_node = kzalloc(sizeof(*event_node), GFP_ATOMIC);
 	if (unlikely(!event_node)){
 		dev_err(&bdev->serdev->dev, "Event allocation failure");
 		return;
