@@ -140,6 +140,14 @@ endchoice
 
 endif # SUMMIT_MWIFIEX
 
+config SUMMIT_MTK_GEN4_WLAN
+	tristate "MediaTek Gen4 WLAN support (MT7961 SDIO)"
+	depends on MMC
+	help
+	  Support the MediaTek Gen4 MT7961 WLAN device over SDIO.
+
+	  The driver source is maintained in a separate private repository.
+
 config QCA_CLD_WLAN
 	tristate "Qualcomm Atheros CLD WLAN module"
 	depends on CFG80211
