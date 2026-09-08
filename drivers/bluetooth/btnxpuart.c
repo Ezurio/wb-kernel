@@ -893,7 +893,6 @@ static bool process_boot_signature(struct btnxpuart_dev *nxpdev)
 	if (test_bit(BTNXPUART_CHECK_BOOT_SIGNATURE, &nxpdev->tx_state)) {
 		clear_bit(BTNXPUART_CHECK_BOOT_SIGNATURE, &nxpdev->tx_state);
 		wake_up_interruptible(&nxpdev->check_boot_sign_wait_q);
-		return false;
 	}
 	return is_fw_downloading(nxpdev);
 }
