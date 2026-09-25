@@ -1571,6 +1571,7 @@ int brcmf_p2p_notify_action_tx_complete(struct brcmf_if *ifp,
 /**
  * brcmf_p2p_tx_action_frame() - send action frame over fil.
  *
+ * @ifp: interface to transmit on.
  * @p2p: p2p info struct for vif.
  * @vif: vif to send.
  * @af_params: action frame data/info.
@@ -1596,7 +1597,6 @@ static s32 brcmf_p2p_tx_action_frame(struct brcmf_p2p_info *p2p,
 	reinit_completion(&p2p->send_af_done);
 	clear_bit(BRCMF_P2P_STATUS_ACTION_TX_COMPLETED, &p2p->status);
 	clear_bit(BRCMF_P2P_STATUS_ACTION_TX_NOACK, &p2p->status);
-
 	if (drvr->wlc_ver.wlc_ver_major == BRCMF_AF_PARAM_V2_FW_MAJOR &&
 	    drvr->wlc_ver.wlc_ver_minor >= BRCMF_AF_PARAM_V2_FW_MINOR) {
 		/* set actframe iovar with af_params_v2 */
@@ -1613,7 +1613,6 @@ static s32 brcmf_p2p_tx_action_frame(struct brcmf_p2p_info *p2p,
 		err = brcmf_fil_bsscfg_data_set(vif->ifp, "actframe", af_params,
 						sizeof(*af_params));
 	}
-
 	if (err) {
 		bphy_err(drvr, " sending action frame has failed\n");
 		goto exit;
@@ -1764,8 +1763,7 @@ static bool brcmf_p2p_check_dwell_overflow(u32 requested_dwell,
 /**
  * brcmf_p2p_send_action_frame() - send action frame .
  *
- * @cfg: driver private data for cfg80211 interface.
- * @ndev: net device to transmit on.
+ * @ifp: interface to transmit on.
  * @af_params: configuration data for action frame.
  * @vif: virtual interface to send
  */
@@ -1776,8 +1774,8 @@ bool brcmf_p2p_send_action_frame(struct brcmf_cfg80211_info *cfg,
 				 struct ieee80211_channel *peer_listen_chan
 				 )
 {
-	struct brcmf_p2p_info *p2p = &cfg->p2p;
 	struct brcmf_if *ifp = netdev_priv(ndev);
+	struct brcmf_p2p_info *p2p = &cfg->p2p;
 	struct brcmf_fil_action_frame_le *action_frame;
 	struct brcmf_config_af_params config_af_params;
 	struct afx_hdl *afx_hdl = &p2p->afx_hdl;
@@ -1935,7 +1933,8 @@ bool brcmf_p2p_send_action_frame(struct brcmf_cfg80211_info *cfg,
 		if (af_params->channel)
 			msleep(P2P_AF_RETRY_DELAY_TIME);
 
-		ack = !brcmf_p2p_tx_action_frame(p2p, vif, af_params, peer_listen_chan->band);
+		ack = !brcmf_p2p_tx_action_frame(p2p, vif, af_params,
+							 peer_listen_chan->band);
 		tx_retry++;
 		dwell_overflow = brcmf_p2p_check_dwell_overflow(requested_dwell,
 								dwell_jiffies);
@@ -2296,7 +2295,6 @@ static struct wireless_dev *brcmf_p2p_create_p2pdev(struct brcmf_p2p_info *p2p,
 
 	WARN_ON(p2p_ifp->bsscfgidx != bsscfgidx);
 
-	init_completion(&p2p->send_af_done);
 	INIT_WORK(&p2p->afx_hdl.afx_work, brcmf_p2p_afx_handler);
 	init_completion(&p2p->afx_hdl.act_frm_scan);
 	init_completion(&p2p->wait_next_af);
@@ -2591,6 +2589,8 @@ s32 brcmf_p2p_attach(struct brcmf_cfg80211_info *cfg, bool p2pdev_forced)
 
 	pri_ifp = brcmf_get_ifp(cfg->pub, 0);
 	p2p->bss_idx[P2PAPI_BSSCFG_PRIMARY].vif = pri_ifp->vif;
+	init_completion(&p2p->send_af_done);
+
 	init_completion(&p2p->send_af_done);
 
 	if (p2pdev_forced) {

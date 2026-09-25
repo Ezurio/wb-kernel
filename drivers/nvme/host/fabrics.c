@@ -186,7 +186,7 @@ int nvmf_reg_read32(struct nvme_ctrl *ctrl, u32 off, u32 *val)
 	if (unlikely(ret != 0))
 		dev_err(ctrl->device,
 			"Property Get error: %d, offset %#x\n",
-			ret > 0 ? ret & ~NVME_SC_DNR : ret, off);
+			ret > 0 ? ret & ~NVME_STATUS_DNR : ret, off);
 
 	return ret;
 }
@@ -232,7 +232,7 @@ int nvmf_reg_read64(struct nvme_ctrl *ctrl, u32 off, u64 *val)
 	if (unlikely(ret != 0))
 		dev_err(ctrl->device,
 			"Property Get error: %d, offset %#x\n",
-			ret > 0 ? ret & ~NVME_SC_DNR : ret, off);
+			ret > 0 ? ret & ~NVME_STATUS_DNR : ret, off);
 	return ret;
 }
 EXPORT_SYMBOL_GPL(nvmf_reg_read64);
@@ -274,10 +274,25 @@ int nvmf_reg_write32(struct nvme_ctrl *ctrl, u32 off, u32 val)
 	if (unlikely(ret))
 		dev_err(ctrl->device,
 			"Property Set error: %d, offset %#x\n",
-			ret > 0 ? ret & ~NVME_SC_DNR : ret, off);
+			ret > 0 ? ret & ~NVME_STATUS_DNR : ret, off);
 	return ret;
 }
 EXPORT_SYMBOL_GPL(nvmf_reg_write32);
+
+int nvmf_subsystem_reset(struct nvme_ctrl *ctrl)
+{
+	int ret;
+
+	if (!nvme_wait_reset(ctrl))
+		return -EBUSY;
+
+	ret = ctrl->ops->reg_write32(ctrl, NVME_REG_NSSR, NVME_SUBSYS_RESET);
+	if (ret)
+		return ret;
+
+	return nvme_try_sched_reset(ctrl);
+}
+EXPORT_SYMBOL_GPL(nvmf_subsystem_reset);
 
 /**
  * nvmf_log_connect_error() - Error-parsing-diagnostic print out function for
@@ -294,7 +309,7 @@ static void nvmf_log_connect_error(struct nvme_ctrl *ctrl,
 		int errval, int offset, struct nvme_command *cmd,
 		struct nvmf_connect_data *data)
 {
-	int err_sctype = errval & ~NVME_SC_DNR;
+	int err_sctype = errval & ~NVME_STATUS_DNR;
 
 	if (errval < 0) {
 		dev_err(ctrl->device,
@@ -1164,8 +1179,8 @@ void nvmf_free_options(struct nvmf_ctrl_options *opts)
 	kfree(opts->subsysnqn);
 	kfree(opts->host_traddr);
 	kfree(opts->host_iface);
-	kfree(opts->dhchap_secret);
-	kfree(opts->dhchap_ctrl_secret);
+	kfree_sensitive(opts->dhchap_secret);
+	kfree_sensitive(opts->dhchap_ctrl_secret);
 	kfree(opts);
 }
 EXPORT_SYMBOL_GPL(nvmf_free_options);

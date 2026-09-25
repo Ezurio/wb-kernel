@@ -201,7 +201,7 @@ static int rxe_init_sq(struct rxe_qp *qp, struct ib_qp_init_attr *init,
 	qp->sq.queue = rxe_queue_init(rxe, &qp->sq.max_wr, wqe_size,
 				      QUEUE_TYPE_FROM_CLIENT);
 	if (!qp->sq.queue) {
-		rxe_err_qp(qp, "Unable to allocate send queue");
+		rxe_err_qp(qp, "Unable to allocate send queue\n");
 		err = -ENOMEM;
 		goto err_out;
 	}
@@ -211,7 +211,7 @@ static int rxe_init_sq(struct rxe_qp *qp, struct ib_qp_init_attr *init,
 			   qp->sq.queue->buf, qp->sq.queue->buf_size,
 			   &qp->sq.queue->ip);
 	if (err) {
-		rxe_err_qp(qp, "do_mmap_info failed, err = %d", err);
+		rxe_err_qp(qp, "do_mmap_info failed, err = %d\n", err);
 		goto err_free;
 	}
 
@@ -292,7 +292,7 @@ static int rxe_init_rq(struct rxe_qp *qp, struct ib_qp_init_attr *init,
 	qp->rq.queue = rxe_queue_init(rxe, &qp->rq.max_wr, wqe_size,
 				      QUEUE_TYPE_FROM_CLIENT);
 	if (!qp->rq.queue) {
-		rxe_err_qp(qp, "Unable to allocate recv queue");
+		rxe_err_qp(qp, "Unable to allocate recv queue\n");
 		err = -ENOMEM;
 		goto err_out;
 	}
@@ -302,7 +302,7 @@ static int rxe_init_rq(struct rxe_qp *qp, struct ib_qp_init_attr *init,
 			   qp->rq.queue->buf, qp->rq.queue->buf_size,
 			   &qp->rq.queue->ip);
 	if (err) {
-		rxe_err_qp(qp, "do_mmap_info failed, err = %d", err);
+		rxe_err_qp(qp, "do_mmap_info failed, err = %d\n", err);
 		goto err_free;
 	}
 
@@ -664,10 +664,9 @@ int rxe_qp_from_attr(struct rxe_qp *qp, struct ib_qp_attr *attr, int mask,
 		int max_dest_rd_atomic = attr->max_dest_rd_atomic ?
 			roundup_pow_of_two(attr->max_dest_rd_atomic) : 0;
 
-		qp->attr.max_dest_rd_atomic = max_dest_rd_atomic;
-
 		free_rd_atomic_resources(qp);
 
+		qp->attr.max_dest_rd_atomic = max_dest_rd_atomic;
 		err = alloc_rd_atomic_resources(qp, max_dest_rd_atomic);
 		if (err)
 			return err;
@@ -817,7 +816,12 @@ static void rxe_qp_do_cleanup(struct work_struct *work)
 	spin_unlock_irqrestore(&qp->state_lock, flags);
 	qp->qp_timeout_jiffies = 0;
 
-	if (qp_type(qp) == IB_QPT_RC) {
+	/* In the function timer_setup, .function is initialized. If .function
+	 * is NULL, it indicates the function timer_setup is not called, the
+	 * timer is not initialized. Or else, the timer is initialized.
+	 */
+	if (qp_type(qp) == IB_QPT_RC && qp->retrans_timer.function &&
+		qp->rnr_nak_timer.function) {
 		del_timer_sync(&qp->retrans_timer);
 		del_timer_sync(&qp->rnr_nak_timer);
 	}
