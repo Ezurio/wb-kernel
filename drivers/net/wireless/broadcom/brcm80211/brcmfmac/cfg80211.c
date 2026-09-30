@@ -10695,8 +10695,8 @@ struct brcmf_cfg80211_info *brcmf_cfg80211_attach(struct brcmf_pub *drvr,
 	ndev->ieee80211_ptr = &vif->wdev;
 	SET_NETDEV_DEV(ndev, wiphy_dev(cfg->wiphy));
 
-	// Summit - Configure regdomain if provided in settings
-	//   Note - Configuration provided as country code except for "ETSI" pseudocode
+	// Configure regdomain if provided in settings
+	// Note - Configuration provided as country code except for "ETSI" pseudocode
 	if (strlen(drvr->settings->regdomain) != 0) {
 		struct brcmf_fil_country_le ccreq;
 
@@ -10710,7 +10710,6 @@ struct brcmf_cfg80211_info *brcmf_cfg80211_attach(struct brcmf_pub *drvr,
 			case CY_CC_55500_CHIP_ID:
 				strcpy(ccreq.country_abbrev, "DE");
 				break;
-			case BRCM_CC_4339_CHIP_ID:
 			case BRCM_CC_43430_CHIP_ID:
 			case CY_CC_43439_CHIP_ID:
 				strcpy(ccreq.country_abbrev, "EU");
@@ -10720,37 +10719,12 @@ struct brcmf_cfg80211_info *brcmf_cfg80211_attach(struct brcmf_pub *drvr,
 			memcpy(ccreq.country_abbrev, drvr->settings->regdomain, BRCMF_COUNTRY_BUF_SZ);
 		}
 
-		// Handle regrev for LWB5 for supported countries
-		if (drvr->bus_if->chip == BRCM_CC_4339_CHIP_ID) {
-			// country codes with rev (a country spec) need to also populate ccode parameter
-			memcpy(ccreq.ccode, ccreq.country_abbrev, BRCMF_COUNTRY_BUF_SZ);
-			if (!strcmp("US", ccreq.ccode))
-				ccreq.rev = cpu_to_le32(911);
-			else if (!strcmp("CA", ccreq.ccode))
-				ccreq.rev = cpu_to_le32(938);
-			else if (!strcmp("EU", ccreq.ccode))
-				ccreq.rev = cpu_to_le32(116);
-			else if (!strcmp("JP", ccreq.ccode))
-				ccreq.rev = cpu_to_le32(101);
-			else if (!strcmp("KR", ccreq.ccode))
-				ccreq.rev = cpu_to_le32(301);
-			else {
-				brcmf_err("Regulatory domain %s not supported, aborting!\n", drvr->settings->regdomain);
-				goto wiphy_out;
-			}
-		} else {
-			ccreq.rev = -1;
-		}
-
 		err = brcmf_fil_iovar_data_set(ifp, "country", &ccreq, sizeof(ccreq));
 		if (err) {
 			brcmf_err("Regulatory domain %s not supported, aborting!\n", drvr->settings->regdomain);
 			goto wiphy_out;
 		}
 		brcmf_info("Using regulatory domain %s\n", drvr->settings->regdomain);
-	} else {
-		brcmf_err("Regulatory domain not configured, aborting!\n");
-		goto wiphy_out;
 	}
 
 	err = wl_init_priv(cfg);
