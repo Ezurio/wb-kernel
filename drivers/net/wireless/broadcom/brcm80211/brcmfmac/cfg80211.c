@@ -9954,7 +9954,7 @@ static int brcmf_setup_wiphy(struct wiphy *wiphy, struct brcmf_if *ifp)
 	if (brcmf_feat_is_enabled(ifp, BRCMF_FEAT_FBT) ||
 	    brcmf_feat_is_enabled(ifp, BRCMF_FEAT_OKC))
 		wiphy_ext_feature_set(wiphy,
-					NL80211_EXT_FEATURE_ROAM_OFFLOAD);
+					NL80211_EXT_FEATURE_FAST_ROAM_OFFLOAD);
 	wiphy_ext_feature_set(wiphy, NL80211_EXT_FEATURE_CQM_RSSI_LIST);
 
 	wiphy->mgmt_stypes = brcmf_txrx_stypes;
