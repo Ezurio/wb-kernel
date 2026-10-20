@@ -3302,6 +3302,7 @@ static int atmel_aes_authenc_crypt(struct aead_request *req,
 				   unsigned long mode)
 {
 	struct atmel_aes_authenc_reqctx *rctx = aead_request_ctx(req);
+	struct crypto_aead *tfm = crypto_aead_reqtfm(req);
 	u32 authsize = crypto_aead_authsize(tfm);
 	bool enc = (mode & AES_FLAGS_ENCRYPT);
 
@@ -3503,7 +3504,7 @@ static void atmel_aes_unregister_algs(struct atmel_aes_dev *dd)
 {
 #if IS_ENABLED(CONFIG_CRYPTO_DEV_ATMEL_AUTHENC)
 	if (dd->caps.has_authenc)
-		crypto_unregister_aeads(aead_aes_algs, ARRAY_SIZE(aes_authenc_algs));
+		crypto_unregister_aeads(aes_authenc_algs, ARRAY_SIZE(aes_authenc_algs));
 #endif
 
 	if (dd->caps.has_xts)
@@ -3579,7 +3580,7 @@ static int atmel_aes_register_algs(struct atmel_aes_dev *dd)
 			atmel_aes_crypto_alg_init(&aes_authenc_algs[i].base);
 		}
 
-		err = crypto_register_aeads(aead_aes_algs, ARRAY_SIZE(aes_authenc_algs));
+		err = crypto_register_aeads(aes_authenc_algs, ARRAY_SIZE(aes_authenc_algs));
 		if (err)
 			goto err_aes_authenc_alg;
 	}
@@ -3625,7 +3626,7 @@ err_aes_ccm_alg:
 err_aes_ahashes_alg:
 #if IS_ENABLED(CONFIG_CRYPTO_DEV_ATMEL_AUTHENC)
 	if (dd->caps.has_authenc)
-		crypto_unregister_aeads(aead_aes_algs, ARRAY_SIZE(aes_authenc_algs));
+		crypto_unregister_aeads(aes_authenc_algs, ARRAY_SIZE(aes_authenc_algs));
 
 err_aes_authenc_alg:
 #endif
